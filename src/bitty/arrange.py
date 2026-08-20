@@ -89,14 +89,28 @@ def _assign(score: Score) -> tuple[Tracks, list[tuple[float, list[Note]]]]:
         ]
         # Pinning is judged against the whole sounding texture, not just this
         # onset: a lone moving inner note must not displace a lead that is still
-        # ringing. After a rest nothing rings at all, and then the comparison
-        # falls back to what each channel last played — a note re-entering alone
-        # belongs to the voice it continues, not automatically to the lead.
-        reference = sounding or [
-            pitch
-            for pitch in (_last_pitch(tracks[voice.role]) for voice in ROSTER)
-            if pitch is not None
-        ]
+        # ringing.
+        #
+        # After a real rest nothing rings, and then the comparison falls back to
+        # what each channel last played, so a note re-entering alone joins the
+        # voice it continues instead of defaulting to the lead. The rest has to
+        # be real: homophonic writing ends every note exactly where the next
+        # begins, and treating that as silence would stop a descending soprano
+        # from ever reaching the lead.
+        last_end = max(
+            (takes[-1].t + takes[-1].dur for takes in tracks.values() if takes),
+            default=None,
+        )
+        after_rest = last_end is not None and last_end < onset - EPSILON
+        reference = sounding or (
+            [
+                pitch
+                for pitch in (_last_pitch(tracks[voice.role]) for voice in ROSTER)
+                if pitch is not None
+            ]
+            if after_rest
+            else []
+        )
 
         if not reference or pending[0].pitch >= max(reference):
             _place(tracks[LEAD_ROLE], pending.pop(0))

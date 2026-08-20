@@ -80,6 +80,24 @@ def test_a_moving_inner_note_does_not_steal_the_bass():
     assert pitches(arrangement, "bass") == [48]
 
 
+def test_notes_that_abut_are_not_treated_as_a_rest():
+    """Homophonic writing ends every note exactly where the next begins. If that
+    counted as silence, pinning would fall back to last pitches, a descending
+    soprano would stop reaching the lead, and a chorale would arpeggiate."""
+    arrangement = arrange(
+        score_of(
+            note(72, 0.0, dur=1.0),
+            note(60, 0.0, dur=1.0),
+            note(48, 0.0, dur=1.0),
+            note(71, 1.0, dur=1.0),
+            note(59, 1.0, dur=1.0),
+            note(47, 1.0, dur=1.0),
+        )
+    )
+    assert pitches(arrangement, "lead") == [72, 71]
+    assert pitches(arrangement, "bass") == [48, 47]
+
+
 def test_a_low_note_re_entering_after_a_rest_goes_to_the_bass():
     """With nothing ringing, pinning falls back to what each channel last played.
     Otherwise the melody channel picks up the bass line after every rest, and the
