@@ -1,0 +1,79 @@
+"""Score files to the internal Score model, via music21."""
+
+from pathlib import Path
+
+from music21 import chord, converter, meter, note, tempo
+
+from bitty.model import Note, Score
+
+DEFAULT_BPM = 120.0
+DEFAULT_VELOCITY = 64
+
+
+def ingest(path: str | Path) -> Score:
+    """Parse a MusicXML, compressed MusicXML, or MIDI file into a Score."""
+    path = Path(path)
+    parsed = converter.parse(str(path))
+
+    bpm = _first_tempo(parsed)
+    seconds_per_quarter = 60.0 / bpm
+
+    notes: list[Note] = []
+    for part_index, part in enumerate(parsed.parts):
+        for element in part.flatten().notes:
+            start = float(element.offset) * seconds_per_quarter
+            dur = float(element.duration.quarterLength) * seconds_per_quarter
+            velocity = _velocity_of(element)
+            for pitch in _pitches_of(element):
+                notes.append(
+                    Note(
+                        pitch=pitch,
+                        start=start,
+                        dur=dur,
+                        velocity=velocity,
+                        part=part_index,
+                    )
+                )
+
+    notes.sort(key=lambda n: (n.start, -n.pitch))
+    return Score(
+        notes=tuple(notes),
+        bpm=bpm,
+        time_signature=_first_time_signature(parsed),
+        title=_title_of(parsed, path),
+    )
+
+
+def _pitches_of(element) -> list[int]:
+    if isinstance(element, chord.Chord):
+        return [int(p.midi) for p in element.pitches]
+    if isinstance(element, note.Note):
+        return [int(element.pitch.midi)]
+    return []
+
+
+def _velocity_of(element) -> int:
+    velocity = getattr(element.volume, "velocity", None)
+    return int(velocity) if velocity is not None else DEFAULT_VELOCITY
+
+
+def _first_tempo(parsed) -> float:
+    marks = parsed.flatten().getElementsByClass(tempo.MetronomeMark)
+    for mark in marks:
+        if mark.number:
+            return float(mark.number)
+    return DEFAULT_BPM
+
+
+def _first_time_signature(parsed) -> tuple[int, int]:
+    signatures = parsed.flatten().getElementsByClass(meter.TimeSignature)
+    for signature in signatures:
+        return (int(signature.numerator), int(signature.denominator))
+    return (4, 4)
+
+
+def _title_of(parsed, path: Path) -> str:
+    metadata = parsed.metadata
+    if metadata is not None and metadata.title:
+        return str(metadata.title)
+    return path.stem
