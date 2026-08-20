@@ -20,6 +20,7 @@ from itertools import groupby
 from bitty.arrangement import MAX_VELOCITY, Arrangement, Channel, Echo, Event
 from bitty.model import Note, Score
 from bitty.voices import (
+    ARP_ROLE,
     BASS_ROLE,
     ECHO_BEATS,
     ECHO_LEVEL,
@@ -30,6 +31,7 @@ from bitty.voices import (
 
 EPSILON = 1e-6  # onset times are floats; anything closer than this is one moment
 GRACE_SEC = 0.032  # music21 gives grace notes zero length; a channel needs some
+ARP_STEP_SEC = 0.016  # the spec's [arp] rate_ms = 16
 
 
 @dataclass
@@ -46,7 +48,8 @@ Tracks = dict[str, list[_Take]]
 
 
 def arrange(score: Score) -> Arrangement:
-    tracks = _assign(score)
+    tracks, leftovers = _assign(score)
+    tracks[ARP_ROLE] = _arpeggiate(leftovers, tracks[ARP_ROLE])
 
     channels: list[Channel] = []
     for voice in ROSTER:
@@ -73,8 +76,9 @@ def _echo(bpm: float) -> Echo:
     return Echo(delay_sec=ECHO_BEATS * 60.0 / bpm, level=ECHO_LEVEL)
 
 
-def _assign(score: Score) -> Tracks:
+def _assign(score: Score) -> tuple[Tracks, list[tuple[float, list[Note]]]]:
     tracks: Tracks = {voice.role: [] for voice in ROSTER}
+    leftovers: list[tuple[float, list[Note]]] = []
 
     for onset, pending in _by_onset(score.notes):
         used: set[str] = set()
@@ -102,14 +106,19 @@ def _assign(score: Score) -> Tracks:
             _place(tracks[BASS_ROLE], pending.pop())
             used.add(BASS_ROLE)
 
+        spare: list[Note] = []
         for note in pending:
             role = _pick_middle(tracks, onset, note, used)
             if role is None:
-                continue  # Task 4 turns these leftovers into an arpeggio
+                spare.append(note)
+                continue
             _place(tracks[role], note)
             used.add(role)
 
-    return tracks
+        if spare:
+            leftovers.append((onset, spare))
+
+    return tracks, leftovers
 
 
 def _by_onset(notes: tuple[Note, ...]) -> list[tuple[float, list[Note]]]:
@@ -176,3 +185,52 @@ def _events(takes: list[_Take]) -> tuple[Event, ...]:
 def _quantize_velocity(velocity: int) -> int:
     """127 MIDI steps down to the 16 levels an 8-bit channel actually has."""
     return max(0, min(MAX_VELOCITY, round(velocity / 127 * MAX_VELOCITY)))
+
+
+def _arpeggiate(
+    leftovers: list[tuple[float, list[Note]]], takes: list[_Take]
+) -> list[_Take]:
+    """Fold notes that found no channel into one fast-cycling line.
+
+    The channel's own note at that moment joins the cycle rather than being
+    replaced by it, so the arpeggio carries the whole chord and not just the
+    part that would otherwise have been lost.
+    """
+    out = list(takes)
+
+    for onset, notes in leftovers:
+        absorbed = [take for take in out if abs(take.t - onset) <= EPSILON]
+        for take in absorbed:
+            out.remove(take)
+
+        pitches = sorted({n.pitch for n in notes} | {take.pitch for take in absorbed})
+        # The cycle lasts only as long as its shortest member: a note that has
+        # ended must not keep sounding just because the arpeggio is still running.
+        span = min([n.dur for n in notes] + [take.dur for take in absorbed])
+        vel = max(
+            [_quantize_velocity(n.velocity) for n in notes] + [take.vel for take in absorbed]
+        )
+        out.extend(_arp_cycle(onset, span, pitches, vel))
+
+    return _clip_overlaps(sorted(out, key=lambda take: take.t))
+
+
+def _arp_cycle(onset: float, span: float, pitches: list[int], vel: int) -> list[_Take]:
+    steps = max(1, int(span / ARP_STEP_SEC))
+    return [
+        _Take(
+            t=onset + step * ARP_STEP_SEC,
+            pitch=pitches[step % len(pitches)],
+            dur=ARP_STEP_SEC,
+            vel=vel,
+        )
+        for step in range(steps)
+    ]
+
+
+def _clip_overlaps(takes: list[_Take]) -> list[_Take]:
+    """One channel, one note — including where a cycle runs into a held note."""
+    for earlier, later in zip(takes, takes[1:]):
+        if earlier.t + earlier.dur > later.t + EPSILON:
+            earlier.dur = later.t - earlier.t
+    return [take for take in takes if take.dur > EPSILON]

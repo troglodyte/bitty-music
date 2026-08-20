@@ -180,3 +180,50 @@ def test_when_every_channel_is_busy_the_nearest_one_is_stolen():
     inner_a = channels(arrangement)["inner_a"].events
     assert [e.pitch for e in inner_a] == [64, 65]
     assert inner_a[0].dur == 1.0
+
+
+def test_a_six_note_chord_arpeggiates_the_overflow():
+    """One channel stepping through the leftovers fast enough to read as chord."""
+    arrangement = arrange(
+        score_of(
+            note(72, 0.0, dur=1.0),
+            note(69, 0.0, dur=1.0),
+            note(67, 0.0, dur=1.0),
+            note(64, 0.0, dur=1.0),
+            note(62, 0.0, dur=1.0),
+            note(48, 0.0, dur=1.0),
+        )
+    )
+    arp = channels(arrangement)["inner_b"].events
+    assert len(arp) == 62  # int(1.0 / 0.016)
+    assert [e.dur for e in arp] == [0.016] * 62
+    # the channel's own note joins the cycle rather than being replaced by it
+    assert [e.pitch for e in arp[:4]] == [62, 64, 62, 64]
+    assert abs(arp[1].t - 0.016) < 1e-9
+
+
+def test_nothing_is_dropped_when_the_channels_run_out():
+    arrangement = arrange(
+        score_of(*[note(p, 0.0, dur=1.0) for p in (72, 69, 67, 64, 62, 60, 48)])
+    )
+    heard = {e.pitch for c in arrangement.channels for e in c.events}
+    assert {72, 69, 67, 64, 62, 60, 48} <= heard
+
+
+def test_sparse_writing_produces_no_arpeggio():
+    arrangement = arrange(
+        score_of(note(72, 0.0, dur=1.0), note(64, 0.0, dur=1.0), note(48, 0.0, dur=1.0))
+    )
+    assert all(e.dur == 1.0 for c in arrangement.channels for e in c.events)
+
+
+def test_the_arpeggio_never_overlaps_the_channel_s_own_notes():
+    arrangement = arrange(
+        score_of(
+            *[note(p, 0.0, dur=1.0) for p in (72, 69, 67, 64, 62, 48)],
+            note(60, 0.5, dur=0.5),  # lands on the arpeggiating channel mid-cycle
+        )
+    )
+    events = channels(arrangement)["inner_b"].events
+    for earlier, later in zip(events, events[1:]):
+        assert earlier.t + earlier.dur <= later.t + 1e-6
