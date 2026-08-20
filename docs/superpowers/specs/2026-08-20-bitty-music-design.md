@@ -300,7 +300,7 @@ clear between them.
 
 | Phase | Delivers |
 |-------|----------|
-| **0. Spike** | Dependency audit; buy-vs-build decision on the synth |
+| **0. Spike** | Dependency audit; buy-vs-build decision on the synth — **complete**, see decision record below |
 | **1. Walking skeleton** | ingest, trivial arrangement (top and bottom note only), plain square and triangle, WAV out — one recognizable tune |
 | **2. Synth** | PolyBLEP, duty cycles, envelopes, echo, stereo, Ogg output, property tests |
 | **3. Arranger** | Voice-leading assignment, arpeggio overflow, articulation rules, `arrangement.json` contract, golden tests, `bitty render` |
@@ -324,6 +324,36 @@ articulation are three separable pieces of work sharing only the
 `Arrangement` contract. Phase 2 splits along oscillators / envelopes /
 mixing on the same principle. A phase that no longer fits is a planning
 signal, not something to power through.
+
+### Phase 0 decision record (2026-08-20)
+
+**Decision: write the synthesizer.** No adoptable library exists, and the
+one credible alternative architecture conflicts with the fidelity target.
+
+Rejected, with reasons:
+
+- **`nesmdb`** — accurate NES APU rendering, but Python 2 only.
+- **`chippy`** — pure-Python waveform generation with no envelopes,
+  bandlimiting, or mixing. Covers the easy fraction of the work.
+- **Furnace headless** — `-output` renders WAV without a GUI, but driving
+  it requires writing `.fur`, a compressed custom binary format. More work
+  than the synth it would replace.
+- **VGM + libvgm** — the strongest alternative. VGM has supported the NES
+  APU since v1.61 and is a simple timestamped register log, roughly 150
+  lines to generate; libvgm renders it with cycle-accurate emulation. With
+  the VRC6 expansion it offers four pulses, saw, triangle, and noise —
+  close to the specified voice budget, and historically authentic.
+
+  Rejected because it returns control of fidelity to the emulated
+  hardware: mono output, 4-bit volume resolution, and hardware pitch
+  quantization. The project targets modern desktop playback with no
+  hardware constraint, and stereo spread, arbitrary envelopes, and
+  bandlimited oscillators were chosen deliberately over authenticity. It
+  also trades a pure-Python dependency for an unpackaged C++ build.
+
+**VGM is retained as future work.** Because `arrangement.json` sits
+upstream of rendering, a `.vgm` emitter can be added later as one target
+module rather than a rewrite.
 
 ## Testing
 
@@ -380,6 +410,6 @@ headless renderer exists before any oscillator is written.
 
 ## Future work
 
-Tracker export from the JSON intermediate; drum grooves and tempo
-manipulation for a gamified mode; a Bevy-side crate that reads `music.ron`
+Tracker export and VGM export from the JSON intermediate; drum grooves and
+tempo manipulation for a gamified mode; a Bevy-side crate that reads `music.ron`
 and handles intro-to-loop transitions; additional engine targets.
