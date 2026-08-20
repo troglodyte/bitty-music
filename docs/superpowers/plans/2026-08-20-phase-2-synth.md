@@ -109,7 +109,7 @@ place.
 `pan` is −1.0 (hard left) to +1.0 (hard right). `quantize` is the number of
 amplitude steps a triangle is crushed to, or `None` for smooth.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/test_arrangement.py`:
 
@@ -186,12 +186,12 @@ def test_unknown_instrument_fields_are_ignored():
 Add `Echo` to the existing import line at the top of the file, and `import
 json` if it is not already there.
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `.venv/bin/pytest tests/test_arrangement.py -v`
 Expected: FAIL — `ImportError: cannot import name 'Echo'`
 
-- [ ] **Step 3: Extend the contract**
+- [x] **Step 3: Extend the contract**
 
 Replace the dataclasses and `from_json` in `src/bitty/arrangement.py`:
 
@@ -286,18 +286,18 @@ def _instrument_from(raw: dict) -> Instrument:
     return Instrument(**kwargs)
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `.venv/bin/pytest tests/test_arrangement.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Run the whole suite — nothing else may break**
+- [x] **Step 5: Run the whole suite — nothing else may break**
 
 Run: `.venv/bin/pytest -q`
 Expected: all pass. Every new field is defaulted, so Phase 1 call sites are
 untouched.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/bitty/arrangement.py tests/test_arrangement.py
@@ -324,7 +324,7 @@ git commit -m "feat: extend the Arrangement contract with envelopes, filter, pan
     sample. PolyBLEP needs it to know how wide a correction to apply.
 - Also produces `NOISE_SEED = 1` and `poly_blep(t, dt)` for tests to reach.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/test_osc.py`:
 
@@ -431,12 +431,12 @@ def test_unknown_wave_fails_loudly():
         raise AssertionError("expected ValueError")
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `.venv/bin/pytest tests/test_osc.py -v`
 Expected: FAIL — `ModuleNotFoundError: No module named 'bitty.osc'`
 
-- [ ] **Step 3: Write the oscillators**
+- [x] **Step 3: Write the oscillators**
 
 `src/bitty/osc.py`:
 
@@ -542,7 +542,7 @@ _OSCILLATORS = {
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `.venv/bin/pytest tests/test_osc.py -v`
 Expected: PASS, 9 tests
@@ -552,7 +552,7 @@ physics, not a bug — PolyBLEP overshoots slightly at the corrected edges,
 which is why the bound is 1.35 rather than 1.0. The mixer's soft clipper is
 what keeps the final output in range.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/bitty/osc.py tests/test_osc.py
@@ -576,7 +576,7 @@ git commit -m "feat: add bandlimited PolyBLEP oscillators and seeded noise"
   of ones, which is the "no envelope" identity for both volume and — after the
   caller's own handling — pitch.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/test_envelope.py`:
 
@@ -625,12 +625,12 @@ def test_negative_steps_are_preserved_for_pitch_envelopes():
     assert values[-1] == 0.0
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `.venv/bin/pytest tests/test_envelope.py -v`
 Expected: FAIL — `ModuleNotFoundError: No module named 'bitty.envelope'`
 
-- [ ] **Step 3: Write the envelope sampler**
+- [x] **Step 3: Write the envelope sampler**
 
 `src/bitty/envelope.py`:
 
@@ -658,12 +658,12 @@ def step_values(steps: tuple[int, ...], length: int, sample_rate: int) -> np.nda
     return np.asarray(steps, dtype=np.float64)[index]
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `.venv/bin/pytest tests/test_envelope.py -v`
 Expected: PASS, 6 tests
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/bitty/envelope.py tests/test_envelope.py
@@ -692,7 +692,7 @@ the previous two. A Python loop over 2.6 million samples is the wrong tool, and
 `scipy.signal.lfilter` is the maintained implementation of exactly this
 recursion. scipy also arrives in Phase 4 regardless as a librosa dependency.
 
-- [ ] **Step 1: Add scipy and install it**
+- [x] **Step 1: Add scipy and install it**
 
 In `pyproject.toml`, extend `dependencies`:
 
@@ -709,7 +709,7 @@ dependencies = [
 Run: `.venv/bin/pip install -e '.[dev]'`
 Expected: scipy installs.
 
-- [ ] **Step 2: Write the failing tests**
+- [x] **Step 2: Write the failing tests**
 
 `tests/test_filters.py`:
 
@@ -777,12 +777,12 @@ def test_dc_blocker_keeps_the_audible_signal():
     assert rms(out - np.mean(out)) > 0.06
 ```
 
-- [ ] **Step 3: Run the tests to verify they fail**
+- [x] **Step 3: Run the tests to verify they fail**
 
 Run: `.venv/bin/pytest tests/test_filters.py -v`
 Expected: FAIL — `ModuleNotFoundError: No module named 'bitty.filters'`
 
-- [ ] **Step 4: Write the filters**
+- [x] **Step 4: Write the filters**
 
 `src/bitty/filters.py`:
 
@@ -826,12 +826,12 @@ def dc_block(signal: np.ndarray) -> np.ndarray:
     return lfilter([1.0, -1.0], [1.0, -DC_BLOCKER_POLE], signal, axis=0)
 ```
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run: `.venv/bin/pytest tests/test_filters.py -v`
 Expected: PASS, 8 tests
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add pyproject.toml src/bitty/filters.py tests/test_filters.py
@@ -857,7 +857,7 @@ git commit -m "feat: add a resonant lowpass and a DC blocker"
 and returns stereo `(n, 2)` now. `cli.py` passes it straight to `sf.write`,
 which handles both, so nothing else needs touching — but the synth tests do.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Replace `tests/test_synth.py` entirely:
 
@@ -1029,13 +1029,13 @@ def test_an_empty_arrangement_renders_silence_not_a_crash():
     assert np.max(np.abs(audio), initial=0.0) == 0.0
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `.venv/bin/pytest tests/test_synth.py -v`
 Expected: FAIL — `ImportError: cannot import name 'Echo'` from the old module,
 or shape assertions failing against the Phase 1 mono renderer.
 
-- [ ] **Step 3: Rewrite the synthesizer**
+- [x] **Step 3: Rewrite the synthesizer**
 
 Replace `src/bitty/synth.py` entirely:
 
@@ -1183,18 +1183,18 @@ def _hz(midi_pitch: int) -> float:
     return A4_HZ * 2.0 ** ((midi_pitch - A4_MIDI) / 12.0)
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `.venv/bin/pytest tests/test_synth.py -v`
 Expected: PASS, 14 tests
 
-- [ ] **Step 5: Run the whole suite**
+- [x] **Step 5: Run the whole suite**
 
 Run: `.venv/bin/pytest -q`
 Expected: all pass. `test_cli.py` uses `len(audio)`, which still reads the
 frame count on a stereo array.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/bitty/synth.py tests/test_synth.py
@@ -1222,7 +1222,7 @@ synthesizer nobody feeds envelopes to is a synthesizer nobody can hear.
 Echo delay comes from the spec's `[echo] delay = "3/16"` — three sixteenths of
 a whole note, which is 0.75 of a beat.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/test_arrange.py`:
 
@@ -1264,12 +1264,12 @@ def test_echo_delay_tracks_the_tempo():
 `FIXTURE` and `ingest` are already imported at the top of that file; check
 before adding duplicates. Add `arrange` if it is not imported.
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `.venv/bin/pytest tests/test_arrange.py -v`
 Expected: FAIL — `assert () != ()`
 
-- [ ] **Step 3: Give the channels a voice**
+- [x] **Step 3: Give the channels a voice**
 
 In `src/bitty/arrange.py`, replace the `LEAD`/`BASS` constants and the
 `arrange` function:
@@ -1330,12 +1330,12 @@ def _echo_delay(bpm: float) -> float:
     return ECHO_BEATS * 60.0 / bpm
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `.venv/bin/pytest tests/test_arrange.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/bitty/arrange.py tests/test_arrange.py
@@ -1363,7 +1363,7 @@ Verified available in this environment: libsndfile 1.2.2 lists `OGG` with a
 Vorbis is lossy, so **determinism is asserted on the float array, never on the
 encoded file.**
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 In `tests/test_cli.py`, replace `test_convert_writes_audio_and_arrangement` and
 `test_converted_audio_has_the_expected_duration`, and add the rest:
@@ -1401,12 +1401,12 @@ def test_the_written_ogg_is_audible(tmp_path):
 Add `import numpy as np` at the top of the file. The 2.375s duration is the
 fixture's 2.0s of music plus the 0.375s echo tail at 120 bpm.
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `.venv/bin/pytest tests/test_cli.py -v`
 Expected: FAIL — no `two_part.ogg`; the CLI still writes WAV.
 
-- [ ] **Step 3: Switch the CLI to Ogg**
+- [x] **Step 3: Switch the CLI to Ogg**
 
 In `src/bitty/cli.py`, replace the body of `convert`:
 
@@ -1436,12 +1436,12 @@ def convert(
     typer.echo(f"{json_path}")
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `.venv/bin/pytest tests/test_cli.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Run the whole suite**
+- [x] **Step 5: Run the whole suite**
 
 Run: `.venv/bin/pytest -q`
 Expected: all pass — roughly 60 tests.
@@ -1494,7 +1494,7 @@ Compare `bwv66_6.ogg` against `bwv66_6_warm.ogg`. This is the "can it be less
 8-bit" question made audible. Whichever you prefer decides whether Phase 5's
 config ships a filtered preset — it does not need deciding now.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/bitty/cli.py tests/test_cli.py
