@@ -66,7 +66,7 @@ what lets `bitty render` exist in Phase 3 without dragging music21 in.
 - Consumes: nothing.
 - Produces: `Note(pitch: int, start: float, dur: float, velocity: int, part: int)`, `Score(notes: list[Note], bpm: float, time_signature: tuple[int, int], title: str)`, and `ingest(path: str | Path) -> Score`.
 
-- [ ] **Step 1: Create `pyproject.toml`**
+- [x] **Step 1: Create `pyproject.toml`**
 
 ```toml
 [build-system]
@@ -98,7 +98,7 @@ packages = ["src/bitty"]
 testpaths = ["tests"]
 ```
 
-- [ ] **Step 2: Create the virtualenv and install**
+- [x] **Step 2: Create the virtualenv and install**
 
 ```bash
 python3 -m venv .venv
@@ -108,7 +108,7 @@ python3 -m venv .venv
 Expected: installs cleanly. music21 pulls a fair number of transitive
 dependencies and takes a minute; that is normal.
 
-- [ ] **Step 3: Create the package marker and the test fixture**
+- [x] **Step 3: Create the package marker and the test fixture**
 
 `src/bitty/__init__.py` is empty.
 
@@ -152,7 +152,7 @@ marking, music21 defaults to 120 BPM, so each quarter note lasts 0.5s.
 </score-partwise>
 ```
 
-- [ ] **Step 4: Write the failing test**
+- [x] **Step 4: Write the failing test**
 
 `tests/test_ingest.py`:
 
@@ -192,12 +192,12 @@ def test_ingest_tags_notes_with_their_source_part():
     assert bass[0].dur == 2.0
 ```
 
-- [ ] **Step 5: Run the test to verify it fails**
+- [x] **Step 5: Run the test to verify it fails**
 
 Run: `.venv/bin/pytest tests/test_ingest.py -v`
 Expected: FAIL, `ModuleNotFoundError: No module named 'bitty.ingest'`
 
-- [ ] **Step 6: Write `src/bitty/model.py`**
+- [x] **Step 6: Write `src/bitty/model.py`**
 
 ```python
 """The musical model produced by ingest, upstream of any chiptune decisions."""
@@ -224,7 +224,7 @@ class Score:
     title: str
 ```
 
-- [ ] **Step 7: Write `src/bitty/ingest.py`**
+- [x] **Step 7: Write `src/bitty/ingest.py`**
 
 ```python
 """Score files to the internal Score model, via music21."""
@@ -308,12 +308,12 @@ def _title_of(parsed, path: Path) -> str:
     return path.stem
 ```
 
-- [ ] **Step 8: Run the test to verify it passes**
+- [x] **Step 8: Run the test to verify it passes**
 
 Run: `.venv/bin/pytest tests/test_ingest.py -v`
 Expected: 4 passed
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add pyproject.toml src/bitty tests/
@@ -336,7 +336,7 @@ This is the file every later phase depends on. The JSON round-trip test is
 not ceremony — it is what makes hand-editing an arrangement and
 re-rendering it safe in Phase 3.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `tests/test_arrangement.py`:
 
@@ -377,12 +377,12 @@ def test_arrangement_json_is_human_editable():
     assert text.count("\n") > 5, "should be indented, not one dense line"
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `.venv/bin/pytest tests/test_arrangement.py -v`
 Expected: FAIL, `ModuleNotFoundError: No module named 'bitty.arrangement'`
 
-- [ ] **Step 3: Write `src/bitty/arrangement.py`**
+- [x] **Step 3: Write `src/bitty/arrangement.py`**
 
 ```python
 """The pipeline's spine: a JSON-serializable chiptune arrangement.
@@ -445,12 +445,12 @@ class Arrangement:
         )
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `.venv/bin/pytest tests/test_arrangement.py -v`
 Expected: 2 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/bitty/arrangement.py tests/test_arrangement.py
@@ -478,7 +478,7 @@ This throws away most of the music, and that is the point — Phase 3
 replaces it wholesale. Its only job is to prove the pipeline carries notes
 from one end to the other.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `tests/test_arrange.py`:
 
@@ -542,12 +542,12 @@ def test_arrangement_meta_carries_title_and_tempo():
     assert arrangement.meta["title"]
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `.venv/bin/pytest tests/test_arrange.py -v`
 Expected: FAIL, `ModuleNotFoundError: No module named 'bitty.arrange'`
 
-- [ ] **Step 3: Write `src/bitty/arrange.py`**
+- [x] **Step 3: Write `src/bitty/arrange.py`**
 
 ```python
 """Phase 1 arranger: keep the top line and the bottom line, drop the rest.
@@ -625,12 +625,12 @@ def _quantize_velocity(velocity: int) -> int:
     return max(0, min(MAX_VELOCITY, round(velocity / 127 * MAX_VELOCITY)))
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `.venv/bin/pytest tests/test_arrange.py -v`
 Expected: 5 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/bitty/arrange.py tests/test_arrange.py
@@ -654,7 +654,7 @@ concession is a 2 ms fade at each note edge: without it every note onset
 is a step discontinuity and the output is more click than music, which
 would make the phase's own acceptance check impossible to judge.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `tests/test_synth.py`:
 
@@ -728,12 +728,12 @@ def test_output_is_float32():
     assert render(one_note()).dtype == np.float32
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `.venv/bin/pytest tests/test_synth.py -v`
 Expected: FAIL, `ModuleNotFoundError: No module named 'bitty.synth'`
 
-- [ ] **Step 3: Write `src/bitty/synth.py`**
+- [x] **Step 3: Write `src/bitty/synth.py`**
 
 ```python
 """Phase 1 synthesizer: naive square and triangle, summed to mono.
@@ -827,12 +827,12 @@ def _hz(midi_pitch: int) -> float:
     return A4_HZ * 2.0 ** ((midi_pitch - A4_MIDI) / 12.0)
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `.venv/bin/pytest tests/test_synth.py -v`
 Expected: 7 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/bitty/synth.py tests/test_synth.py
@@ -855,7 +855,7 @@ Writing the arrangement JSON alongside the audio is not extra scope — it
 is what makes Phase 3's `bitty render` a small change rather than a
 restructuring, and it is the file you read when the audio sounds wrong.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `tests/test_cli.py`:
 
@@ -903,12 +903,12 @@ def test_missing_input_file_fails_loudly(tmp_path):
     assert result.exit_code != 0
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `.venv/bin/pytest tests/test_cli.py -v`
 Expected: FAIL, `ModuleNotFoundError: No module named 'bitty.cli'`
 
-- [ ] **Step 3: Write `src/bitty/cli.py`**
+- [x] **Step 3: Write `src/bitty/cli.py`**
 
 ```python
 """Command-line entry point."""
@@ -947,17 +947,17 @@ def convert(
     typer.echo(f"{json_path}")
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `.venv/bin/pytest tests/test_cli.py -v`
 Expected: 4 passed
 
-- [ ] **Step 5: Run the whole suite**
+- [x] **Step 5: Run the whole suite**
 
 Run: `.venv/bin/pytest -v`
 Expected: 22 passed
 
-- [ ] **Step 6: Acceptance — convert a real piece and listen to it**
+- [x] **Step 6: Acceptance — convert a real piece and listen to it**
 
 Download a public-domain MusicXML score with a clear melody and bass — a
 Bach chorale from the Mutopia Project or a Clementi sonatina works well.
@@ -977,7 +977,7 @@ If the melody is unrecognizable, the arranger picked the wrong part.
 Inspect `out/<name>.arrangement.json` to see which pitches landed in which
 channel before changing any code.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/bitty/cli.py tests/test_cli.py
