@@ -1446,7 +1446,7 @@ Expected: PASS
 Run: `.venv/bin/pytest -q`
 Expected: all pass — roughly 60 tests.
 
-- [ ] **Step 6: Acceptance — render the Phase 1 piece again and listen**
+- [x] **Step 6: Acceptance — render the Phase 1 piece again and listen**
 
 Render the same Bach chorale Phase 1 was accepted on, so the comparison is
 like for like:
@@ -1517,3 +1517,20 @@ git commit -m "feat: write Ogg Vorbis by default, with a --wav escape hatch"
 Phase 3 replaces `arrange.py` — voice-leading assignment, arpeggio overflow,
 and articulation rules — against the contract this phase extended. It adds
 channels and events; it does not change what `synth.py` does with them.
+
+## Outcome of the warmth listen (2026-08-20)
+
+Heard both ways on the bwv66.6 chorale. **The dry render wins for now — the
+filter stays off by default, as planned.** The preference is not firm, so the
+warm path stays live rather than being reverted:
+
+- `filters.py` ships with the lowpass and its eight property tests.
+- `Instrument.cutoff_hz` / `resonance` are contract fields that round-trip
+  through `arrangement.json`, so any render can be warmed by hand-editing.
+- `synth.py` applies the filter whenever `cutoff_hz` is set.
+- The A/B recipe is the snippet in Task 7 Step 6 above: `cutoff_hz=2000.0`,
+  `resonance=1.2` on every channel.
+
+Phase 5's config work should expose this as a preset rather than assume the
+question is closed. Audition renders must be written as WAV — `aplay` cannot
+decode Ogg and plays it as static.
