@@ -199,9 +199,11 @@ def _arpeggiate(
     out = list(takes)
 
     for onset, notes in leftovers:
+        # Partition rather than remove-by-value: `_Take` is a mutable dataclass
+        # with structural equality, so `list.remove` would match any take that
+        # merely looks the same.
         absorbed = [take for take in out if abs(take.t - onset) <= EPSILON]
-        for take in absorbed:
-            out.remove(take)
+        out = [take for take in out if abs(take.t - onset) > EPSILON]
 
         pitches = sorted({n.pitch for n in notes} | {take.pitch for take in absorbed})
         # The cycle lasts only as long as its shortest member: a note that has
@@ -216,7 +218,10 @@ def _arpeggiate(
 
 
 def _arp_cycle(onset: float, span: float, pitches: list[int], vel: int) -> list[_Take]:
-    steps = max(1, int(span / ARP_STEP_SEC))
+    # At least one step per pitch. A short dense chord — an ornament, or a
+    # staccato stab — must still sound every note it was handed, even if the
+    # cycle then runs slightly past where the chord ended.
+    steps = max(len(pitches), int(span / ARP_STEP_SEC))
     return [
         _Take(
             t=onset + step * ARP_STEP_SEC,

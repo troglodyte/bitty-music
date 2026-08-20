@@ -210,6 +210,16 @@ def test_nothing_is_dropped_when_the_channels_run_out():
     assert {72, 69, 67, 64, 62, 60, 48} <= heard
 
 
+def test_a_short_dense_chord_still_sounds_every_pitch():
+    """A cycle shorter than its pitch set is where voices quietly went missing:
+    seven notes lasting 32ms each left room for two arpeggio steps."""
+    arrangement = arrange(
+        score_of(*[note(p, 0.0, dur=0.032) for p in (72, 69, 67, 64, 62, 60, 48)])
+    )
+    heard = {e.pitch for c in arrangement.channels for e in c.events}
+    assert {72, 69, 67, 64, 62, 60, 48} <= heard
+
+
 def test_sparse_writing_produces_no_arpeggio():
     arrangement = arrange(
         score_of(note(72, 0.0, dur=1.0), note(64, 0.0, dur=1.0), note(48, 0.0, dur=1.0))
