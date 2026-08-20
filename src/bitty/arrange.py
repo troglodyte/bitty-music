@@ -103,7 +103,7 @@ def _assign(score: Score) -> Tracks:
             used.add(BASS_ROLE)
 
         for note in pending:
-            role = _pick_middle(tracks, note, used)
+            role = _pick_middle(tracks, onset, note, used)
             if role is None:
                 continue  # Task 4 turns these leftovers into an arpeggio
             _place(tracks[role], note)
@@ -143,11 +143,21 @@ def _last_pitch(takes: list[_Take]) -> int | None:
     return takes[-1].pitch if takes else None
 
 
-def _pick_middle(tracks: Tracks, note: Note, used: set[str]) -> str | None:
+def _pick_middle(tracks: Tracks, onset: float, note: Note, used: set[str]) -> str | None:
+    """Nearest last pitch, but only among channels that are not mid-note.
+
+    Stealing is the fallback rather than the rule. A held inner voice cut short
+    leaves a hole in the harmony, which the ear reads as the texture breaking;
+    a note landing on a further-away channel is only a change of colour.
+    """
     options = [role for role in MIDDLE_ROLES if role not in used]
     if not options:
         return None
-    return min(options, key=lambda role: _distance(_last_pitch(tracks[role]), note.pitch))
+    free = [role for role in options if _sounding(tracks[role], onset) is None]
+    return min(
+        free or options,
+        key=lambda role: _distance(_last_pitch(tracks[role]), note.pitch),
+    )
 
 
 def _distance(last_pitch: int | None, pitch: int) -> int:

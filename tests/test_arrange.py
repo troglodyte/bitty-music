@@ -138,3 +138,45 @@ def test_arrangement_meta_carries_title_and_tempo():
 def test_the_filter_stays_off_by_default():
     arrangement = arrange(ingest(FIXTURE))
     assert all(c.instrument.cutoff_hz is None for c in arrangement.channels)
+
+
+def test_a_sustained_inner_voice_is_not_cut_short_for_a_nearby_note():
+    """Prefer-free: a hole in the harmony costs more than a timbre jump."""
+    arrangement = arrange(
+        score_of(
+            # every middle channel takes a note, so none is attractive merely
+            # for being untouched
+            note(72, 0.0, dur=0.5),
+            note(67, 0.0, dur=0.5),
+            note(64, 0.0, dur=0.5),
+            note(62, 0.0, dur=0.5),
+            note(48, 0.0, dur=0.5),
+            # the counter voice then holds 67 for four seconds
+            note(72, 0.5, dur=4.0),
+            note(67, 0.5, dur=4.0),
+            note(48, 0.5, dur=4.0),
+            # 66 is nearest to the counter's 67 — but the counter is mid-note
+            note(66, 1.0, dur=1.0),
+        )
+    )
+    counter = channels(arrangement)["counter"].events
+    assert [e.pitch for e in counter] == [67, 67]
+    assert counter[1].dur == 4.0, "the held 67 must survive intact"
+    assert 66 in pitches(arrangement, "inner_a")
+
+
+def test_when_every_channel_is_busy_the_nearest_one_is_stolen():
+    """Stealing is the fallback, not the rule — but it is still the fallback."""
+    arrangement = arrange(
+        score_of(
+            note(72, 0.0, dur=4.0),
+            note(67, 0.0, dur=4.0),
+            note(64, 0.0, dur=4.0),
+            note(62, 0.0, dur=4.0),
+            note(48, 0.0, dur=4.0),
+            note(65, 1.0, dur=1.0),  # nearest last pitch is inner_a's 64
+        )
+    )
+    inner_a = channels(arrangement)["inner_a"].events
+    assert [e.pitch for e in inner_a] == [64, 65]
+    assert inner_a[0].dur == 1.0
