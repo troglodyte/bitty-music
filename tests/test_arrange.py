@@ -72,6 +72,29 @@ def test_grace_notes_survive_as_short_notes():
     assert lead[0].dur == 0.032
 
 
+def test_a_moving_inner_note_does_not_steal_the_bass():
+    """The mirror of the lead case: the bottom of the texture is pinned too."""
+    arrangement = arrange(
+        score_of(note(72, 0.0, dur=2.0), note(48, 0.0, dur=2.0), note(60, 1.0, dur=1.0))
+    )
+    assert pitches(arrangement, "bass") == [48]
+
+
+def test_a_low_note_re_entering_after_a_rest_goes_to_the_bass():
+    """With nothing ringing, pinning falls back to what each channel last played.
+    Otherwise the melody channel picks up the bass line after every rest, and the
+    50%-duty lead pulse ends up playing notes two octaves below the tune."""
+    arrangement = arrange(
+        score_of(
+            note(72, 0.0, dur=1.0),
+            note(40, 0.0, dur=1.0),
+            note(38, 2.0, dur=1.0),  # the bass returns alone after a beat of silence
+        )
+    )
+    assert pitches(arrangement, "bass") == [40, 38]
+    assert pitches(arrangement, "lead") == [72]
+
+
 def test_velocity_is_quantized_to_sixteen_levels():
     arrangement = arrange(ingest(FIXTURE))
     for channel in arrangement.channels:

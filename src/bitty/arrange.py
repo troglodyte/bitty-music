@@ -78,19 +78,27 @@ def _assign(score: Score) -> Tracks:
 
     for onset, pending in _by_onset(score.notes):
         used: set[str] = set()
-        held = [
+        sounding = [
             pitch
             for pitch in (_sounding(tracks[voice.role], onset) for voice in ROSTER)
             if pitch is not None
         ]
+        # Pinning is judged against the whole sounding texture, not just this
+        # onset: a lone moving inner note must not displace a lead that is still
+        # ringing. After a rest nothing rings at all, and then the comparison
+        # falls back to what each channel last played — a note re-entering alone
+        # belongs to the voice it continues, not automatically to the lead.
+        reference = sounding or [
+            pitch
+            for pitch in (_last_pitch(tracks[voice.role]) for voice in ROSTER)
+            if pitch is not None
+        ]
 
-        # Pinning is against the whole sounding texture, not just this onset:
-        # a lone moving inner note must not displace a lead that is still ringing.
-        if not held or pending[0].pitch >= max(held):
+        if not reference or pending[0].pitch >= max(reference):
             _place(tracks[LEAD_ROLE], pending.pop(0))
             used.add(LEAD_ROLE)
 
-        if pending and (not held or pending[-1].pitch <= min(held)):
+        if pending and (not reference or pending[-1].pitch <= min(reference)):
             _place(tracks[BASS_ROLE], pending.pop())
             used.add(BASS_ROLE)
 
