@@ -172,9 +172,11 @@ A cascade, cheapest and most trustworthy first:
 1. **Repeat marks.** The composer stating where the loop is. Most sourced
    pieces resolve here.
 2. **Section boundaries** from analyze.
-3. **Self-similarity.** Find the pair of bar positions whose following
-   material matches best by per-bar feature vector, constrained to
-   downbeats and `loop.min_bars`.
+3. **Self-similarity.** `librosa.segment.recurrence_matrix` over the
+   rendered audio, snapped to bar boundaries from the tempo map. Preferred
+   over a hand-rolled symbolic comparison: structure analysis is a solved
+   problem with a maintained implementation, and reimplementing it is
+   effort spent on someone else's finished work.
 4. **Seam check.** Render the splice, measure discontinuity, reject
    candidates that click or that cut a note mid-phrase.
 
@@ -290,6 +292,39 @@ The convert/render split is what makes hand-editing practical: fixing an
 arrangement costs a JSON edit and a one-second re-render, not a full
 re-analysis.
 
+## Implementation phases
+
+Each phase is sized for a single fresh session. The spec is the shared
+context, so no phase needs to carry the previous one's conversation —
+clear between them.
+
+| Phase | Delivers |
+|-------|----------|
+| **0. Spike** | Dependency audit; buy-vs-build decision on the synth |
+| **1. Walking skeleton** | ingest, trivial arrangement (top and bottom note only), plain square and triangle, WAV out — one recognizable tune |
+| **2. Synth** | PolyBLEP, duty cycles, envelopes, echo, stereo, Ogg output, property tests |
+| **3. Arranger** | Voice-leading assignment, arpeggio overflow, articulation rules, `arrangement.json` contract, golden tests, `bitty render` |
+| **4. Structure** | analyze, `bitty sections`, loop cascade, `--bars` / `--loop-from`, intro and loop split |
+| **5. Targets and config** | TOML precedence, presets, target registry, bevy / bevy-kira / generic emitters |
+
+Ordering rationale: Phase 1 proves the pipeline while it is still small
+enough to hold in one head. Phase 2 precedes the arranger because a buzzy
+synth makes good and bad reductions sound identical — you cannot judge
+Phase 3 without it. Phase 5 is deliberately last so the plumbing is shaped
+by what the earlier phases learned.
+
+Every phase ends with something audible, so each is a genuine stopping
+point if priorities change.
+
+**Split a phase when it grows.** If a phase is consuming more context than
+a single session comfortably holds, or its plan exceeds roughly a dozen
+steps, stop and split it rather than pushing through. Phase 3 is the
+likeliest candidate — voice assignment, arpeggio overflow, and
+articulation are three separable pieces of work sharing only the
+`Arrangement` contract. Phase 2 splits along oscillators / envelopes /
+mixing on the same principle. A phase that no longer fits is a planning
+signal, not something to power through.
+
 ## Testing
 
 Tests hang off the JSON intermediate.
@@ -309,8 +344,27 @@ No golden audio blobs. They are brittle and uninformative on failure.
 
 ## Dependencies
 
-Python 3.11+, `music21`, `numpy`, `typer`, `sounddevice` (for `--play`),
-and `ffmpeg` for OGG encoding.
+Python 3.11+, plus:
+
+| Package | Role |
+|---------|------|
+| `music21` | Score parsing, key detection, repeat marks, section structure |
+| `numpy` | Signal buffers and DSP |
+| `librosa` | Structural segmentation for the loop-finder fallback |
+| `soundfile` | Ogg Vorbis encoding via libsndfile — no ffmpeg subprocess |
+| `mutagen` | Vorbis comment tags (LOOPSTART/LOOPLENGTH) |
+| `sounddevice` | `--play` audition path |
+| `typer` | CLI |
+
+`tomllib` from the standard library reads config.
+
+Deliberately **not** hand-rolled: audio encoding, metadata tag writing,
+key detection, structural segmentation, and score parsing. Each has a
+maintained library doing it better than a reimplementation would.
+
+The synthesis stage is the one component specified as hand-written, and
+that decision is provisional — Phase 0 verifies no suitable library or
+headless renderer exists before any oscillator is written.
 
 ## Risks
 
