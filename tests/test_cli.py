@@ -53,3 +53,48 @@ def test_written_arrangement_reloads(tmp_path):
 def test_missing_input_file_fails_loudly(tmp_path):
     result = runner.invoke(app, ["convert", str(tmp_path / "nope.musicxml"), "-o", str(tmp_path)])
     assert result.exit_code != 0
+
+
+def test_render_reproduces_the_audio_from_an_arrangement(tmp_path):
+    runner.invoke(app, ["convert", str(FIXTURE), "-o", str(tmp_path), "--wav"])
+    before, _ = sf.read(tmp_path / "two_part.wav")
+    (tmp_path / "two_part.wav").unlink()
+
+    result = runner.invoke(
+        app, ["render", str(tmp_path / "two_part.arrangement.json"), "-o", str(tmp_path), "--wav"]
+    )
+
+    assert result.exit_code == 0, result.output
+    after, _ = sf.read(tmp_path / "two_part.wav")
+    assert np.array_equal(before, after)
+
+
+def test_render_names_the_output_after_the_piece(tmp_path):
+    """`foo.arrangement.json` re-renders to `foo.wav`, not `foo.arrangement.wav`."""
+    runner.invoke(app, ["convert", str(FIXTURE), "-o", str(tmp_path)])
+    runner.invoke(
+        app, ["render", str(tmp_path / "two_part.arrangement.json"), "-o", str(tmp_path), "--wav"]
+    )
+    assert (tmp_path / "two_part.wav").exists()
+    assert not (tmp_path / "two_part.arrangement.wav").exists()
+
+
+def test_a_hand_edited_arrangement_renders_without_reanalysis(tmp_path):
+    """The whole point of the split: the JSON overrules the arranger."""
+    runner.invoke(app, ["convert", str(FIXTURE), "-o", str(tmp_path)])
+    path = tmp_path / "two_part.arrangement.json"
+    data = json.loads(path.read_text())
+    data["channels"] = data["channels"][:1]
+    path.write_text(json.dumps(data))
+
+    result = runner.invoke(app, ["render", str(path), "-o", str(tmp_path), "--wav"])
+
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / "two_part.wav").exists()
+
+
+def test_render_rejects_a_missing_arrangement(tmp_path):
+    result = runner.invoke(
+        app, ["render", str(tmp_path / "nope.arrangement.json"), "-o", str(tmp_path)]
+    )
+    assert result.exit_code != 0
