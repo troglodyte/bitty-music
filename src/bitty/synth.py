@@ -1,81 +1,133 @@
-"""Phase 1 synthesizer: naive square and triangle, summed to mono.
+"""The mixer: an Arrangement in, a stereo float32 buffer out.
 
-No bandlimiting, no envelopes, no stereo — Phase 2 adds all three. The
-2 ms edge fade is the exception, and exists only so note onsets do not
-click loudly enough to drown out the thing this phase is meant to check.
+This file owns routing and gain staging only. Waveforms live in `osc`,
+envelopes in `envelope`, and filtering in `filters` — each a pure function of
+arrays, which is what makes them testable as properties instead of by ear.
+
+Signal path per channel: oscillator -> pitch and volume envelopes -> edge fade
+-> lowpass -> constant-power pan -> sum. Then, across the mix: echo taps, DC
+blocker, soft clip.
 """
+
+import math
 
 import numpy as np
 
-from bitty.arrangement import MAX_VELOCITY, Arrangement, Event, Instrument
+from bitty.arrangement import MAX_VELOCITY, Arrangement, Channel, Event, Instrument
+from bitty.envelope import step_values
+from bitty.filters import dc_block, lowpass
+from bitty.osc import oscillator
 
 SAMPLE_RATE = 44100
 FADE_SECONDS = 0.002
+MIX_HEADROOM = 0.9
 A4_MIDI = 69
 A4_HZ = 440.0
 
 
 def render(arrangement: Arrangement, sample_rate: int = SAMPLE_RATE) -> np.ndarray:
-    """Render an arrangement to a mono float32 buffer in [-1.0, 1.0]."""
-    total_seconds = _duration_of(arrangement)
-    buffer = np.zeros(int(round(total_seconds * sample_rate)), dtype=np.float64)
+    """Render an arrangement to stereo float32 in [-1.0, 1.0]."""
+    length = _length_of(arrangement, sample_rate)
+    mix = np.zeros((length, 2), dtype=np.float64)
     if not arrangement.channels:
-        return buffer.astype(np.float32)
+        return mix.astype(np.float32)
 
-    gain = 1.0 / len(arrangement.channels)
+    # Voices sum incoherently far more often than they line up, so sqrt(n)
+    # keeps a five-voice mix as loud as a two-voice one without leaving the
+    # soft clipper to do all the work.
+    gain = MIX_HEADROOM / math.sqrt(len(arrangement.channels))
+
     for channel in arrangement.channels:
-        for event in channel.events:
-            _mix_event(buffer, event, channel.instrument, gain, sample_rate)
+        voice = _render_channel(channel, length, sample_rate) * gain
+        _add_panned(mix, voice, channel.pan, level=1.0, offset=0)
+        if channel.echo:
+            # The repeat sits on the opposite side of the image. Mono hardware
+            # never did this; it is the cheapest width available and the spec
+            # buys stereo spread deliberately.
+            _add_panned(
+                mix,
+                voice,
+                -channel.pan,
+                level=channel.echo.level,
+                offset=int(round(channel.echo.delay_sec * sample_rate)),
+            )
 
-    return np.clip(buffer, -1.0, 1.0).astype(np.float32)
+    return np.tanh(dc_block(mix)).astype(np.float32)
 
 
-def _duration_of(arrangement: Arrangement) -> float:
+def _length_of(arrangement: Arrangement, sample_rate: int) -> int:
     ends = [
-        event.t + event.dur
+        event.t + event.dur + (channel.echo.delay_sec if channel.echo else 0.0)
         for channel in arrangement.channels
         for event in channel.events
     ]
-    return max(ends, default=0.0)
+    return int(round(max(ends, default=0.0) * sample_rate))
 
 
-def _mix_event(
-    buffer: np.ndarray,
-    event: Event,
-    instrument: Instrument,
-    gain: float,
-    sample_rate: int,
+def _render_channel(channel: Channel, length: int, sample_rate: int) -> np.ndarray:
+    voice = np.zeros(length, dtype=np.float64)
+    for event in channel.events:
+        _add_event(voice, event, channel.instrument, sample_rate)
+
+    if channel.instrument.cutoff_hz:
+        voice = lowpass(
+            voice,
+            channel.instrument.cutoff_hz,
+            channel.instrument.resonance,
+            sample_rate,
+        )
+    return voice
+
+
+def _add_event(
+    voice: np.ndarray, event: Event, instrument: Instrument, sample_rate: int
 ) -> None:
-    start = int(round(event.t * sample_rate))
     length = int(round(event.dur * sample_rate))
     if length <= 0:
         return
 
-    phase = np.arange(length, dtype=np.float64) * (_hz(event.pitch) / sample_rate)
-    wave = _oscillator(instrument.wave)(phase, instrument.duty)
-    wave *= (event.vel / MAX_VELOCITY) * gain
-    wave *= _edge_fade(length, sample_rate)
+    inc = np.full(length, _hz(event.pitch) / sample_rate, dtype=np.float64)
+    if instrument.pitch_env:
+        semitones = step_values(instrument.pitch_env, length, sample_rate)
+        inc = inc * 2.0 ** (semitones / 12.0)
 
-    end = min(start + length, len(buffer))
-    buffer[start:end] += wave[: end - start]
+    phase = np.concatenate(([0.0], np.cumsum(inc)[:-1]))
+    wave = oscillator(instrument.wave)(phase, inc, instrument)
+
+    amplitude = event.vel / MAX_VELOCITY
+    if instrument.volume_env:
+        amplitude = amplitude * (
+            step_values(instrument.volume_env, length, sample_rate) / MAX_VELOCITY
+        )
+    wave = wave * amplitude * _edge_fade(length, sample_rate)
+
+    start = int(round(event.t * sample_rate))
+    end = min(start + length, len(voice))
+    if end > start:
+        voice[start:end] += wave[: end - start]
 
 
-def _oscillator(name: str):
-    try:
-        return {"pulse": _pulse, "triangle": _triangle}[name]
-    except KeyError:
-        raise ValueError(f"unknown wave {name!r}") from None
+def _add_panned(
+    mix: np.ndarray, voice: np.ndarray, pan: float, level: float, offset: int
+) -> None:
+    if level == 0.0 or offset >= len(mix):
+        return
+
+    end = min(offset + len(voice), len(mix))
+    segment = voice[: end - offset] * level
+    left, right = _pan_gains(pan)
+    mix[offset:end, 0] += segment * left
+    mix[offset:end, 1] += segment * right
 
 
-def _pulse(phase: np.ndarray, duty: float) -> np.ndarray:
-    return np.where((phase % 1.0) < duty, 1.0, -1.0)
-
-
-def _triangle(phase: np.ndarray, duty: float) -> np.ndarray:
-    return 4.0 * np.abs((phase + 0.25) % 1.0 - 0.5) - 1.0
+def _pan_gains(pan: float) -> tuple[float, float]:
+    """Constant-power pan: a voice keeps its loudness as it crosses the image."""
+    angle = (max(-1.0, min(1.0, pan)) + 1.0) * math.pi / 4.0
+    return math.cos(angle), math.sin(angle)
 
 
 def _edge_fade(length: int, sample_rate: int) -> np.ndarray:
+    """Two milliseconds in and out, so note boundaries do not click."""
     fade = min(int(FADE_SECONDS * sample_rate), length // 2)
     envelope = np.ones(length, dtype=np.float64)
     if fade > 0:
