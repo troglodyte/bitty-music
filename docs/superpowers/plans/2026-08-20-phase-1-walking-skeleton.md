@@ -957,7 +957,7 @@ Expected: 4 passed
 Run: `.venv/bin/pytest -v`
 Expected: 22 passed
 
-- [ ] **Step 6: Acceptance — convert a real piece and listen to it**
+- [x] **Step 6: Acceptance — convert a real piece and listen to it**
 
 Download a public-domain MusicXML score with a clear melody and bass — a
 Bach chorale from the Mutopia Project or a Clementi sonatina works well.
