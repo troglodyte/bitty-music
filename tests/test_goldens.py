@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from bitty.arrange import arrange
+from bitty.arrange import ARP_STEP_SEC, arrange
 from bitty.ingest import ingest
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -39,13 +39,25 @@ def test_no_channel_plays_two_notes_at_once(name):
 
 @pytest.mark.parametrize("name", NAMES)
 def test_every_source_note_is_heard(name):
-    """Nothing vanishes: overflow arpeggiates, and grace notes get a floor."""
+    """Nothing vanishes: overflow arpeggiates, and grace notes get a floor.
+
+    A note counts as heard only if some event starts at its own onset, or if an
+    arpeggio step of its pitch falls inside its span. Merely finding the same
+    pitch somewhere in the window would let a dropped note be excused by an
+    unrelated voice that happens to be playing it.
+    """
     score = ingest(FIXTURES / f"{name}.mxl")
     events = [e for c in arranged(name).channels for e in c.events]
     for note in score.notes:
         assert any(
             e.pitch == note.pitch
-            and note.start - EPSILON <= e.t <= note.start + note.dur + EPSILON
+            and (
+                abs(e.t - note.start) <= EPSILON
+                or (
+                    abs(e.dur - ARP_STEP_SEC) < 1e-9
+                    and note.start - EPSILON <= e.t <= note.start + note.dur + EPSILON
+                )
+            )
             for e in events
         ), f"{note} never sounds"
 
