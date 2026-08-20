@@ -26,19 +26,22 @@ def main() -> None:
 def convert(
     score: Path = typer.Argument(..., exists=True, dir_okay=False, readable=True),
     out_dir: Path = typer.Option(Path("out"), "-o", "--out-dir"),
+    wav: bool = typer.Option(False, "--wav", help="Write uncompressed WAV instead of Ogg."),
 ) -> None:
-    """Convert a score to a WAV file and its arrangement JSON."""
+    """Convert a score to audio and its arrangement JSON."""
     out_dir.mkdir(parents=True, exist_ok=True)
 
     arrangement = arrange(ingest(score))
     audio = render(arrangement)
 
-    stem = score.stem
-    wav_path = out_dir / f"{stem}.wav"
-    json_path = out_dir / f"{stem}.arrangement.json"
+    audio_path = out_dir / f"{score.stem}{'.wav' if wav else '.ogg'}"
+    json_path = out_dir / f"{score.stem}.arrangement.json"
 
-    sf.write(wav_path, audio, SAMPLE_RATE)
+    if wav:
+        sf.write(audio_path, audio, SAMPLE_RATE)
+    else:
+        sf.write(audio_path, audio, SAMPLE_RATE, format="OGG", subtype="VORBIS")
     json_path.write_text(arrangement.to_json())
 
-    typer.echo(f"{wav_path}  ({len(audio) / SAMPLE_RATE:.1f}s)")
+    typer.echo(f"{audio_path}  ({len(audio) / SAMPLE_RATE:.1f}s)")
     typer.echo(f"{json_path}")

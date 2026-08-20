@@ -8,11 +8,34 @@ the Arrangement it returns.
 from collections import defaultdict
 from itertools import groupby
 
-from bitty.arrangement import MAX_VELOCITY, Arrangement, Channel, Event, Instrument
+from bitty.arrangement import (
+    MAX_VELOCITY,
+    Arrangement,
+    Channel,
+    Echo,
+    Event,
+    Instrument,
+)
 from bitty.model import Note, Score
 
-LEAD = Instrument(wave="pulse", duty=0.5)
-BASS = Instrument(wave="triangle")
+# A short decay plus an upward pitch blip on the attack: the two things that
+# separate a chip lead from a sine tone. Levels are 0-15, one per 60th second.
+LEAD = Instrument(
+    wave="pulse",
+    duty=0.5,
+    volume_env=(15, 15, 14, 13, 12, 12, 11),
+    pitch_env=(2, 1, 0),
+)
+BASS = Instrument(
+    wave="triangle",
+    volume_env=(15, 14, 13, 12),
+    quantize=16,  # the NES triangle's 16 amplitude steps, and its bite
+)
+
+LEAD_PAN = -0.25
+BASS_PAN = 0.25
+ECHO_BEATS = 0.75  # the spec's [echo] delay = "3/16" of a whole note
+ECHO_LEVEL = 0.35
 
 
 def arrange(score: Score) -> Arrangement:
@@ -20,10 +43,25 @@ def arrange(score: Score) -> Arrangement:
     return Arrangement(
         meta={"title": score.title, "bpm": score.bpm},
         channels=(
-            Channel(role="lead", instrument=LEAD, events=_to_events(lead_notes)),
-            Channel(role="bass", instrument=BASS, events=_to_events(bass_notes)),
+            Channel(
+                role="lead",
+                instrument=LEAD,
+                events=_to_events(lead_notes),
+                pan=LEAD_PAN,
+                echo=Echo(delay_sec=_echo_delay(score.bpm), level=ECHO_LEVEL),
+            ),
+            Channel(
+                role="bass",
+                instrument=BASS,
+                events=_to_events(bass_notes),
+                pan=BASS_PAN,
+            ),
         ),
     )
+
+
+def _echo_delay(bpm: float) -> float:
+    return ECHO_BEATS * 60.0 / bpm
 
 
 def _split_voices(notes: tuple[Note, ...]) -> tuple[list[Note], list[Note]]:

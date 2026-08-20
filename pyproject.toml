@@ -10,6 +10,7 @@ requires-python = ">=3.11"
 dependencies = [
     "music21>=9.1",
     "numpy>=1.26",
+    "scipy>=1.11",
     "soundfile>=0.12",
     "typer>=0.12",
 ]
