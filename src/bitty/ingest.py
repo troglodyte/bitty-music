@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from music21 import chord, converter, meter, note, tempo
+from music21 import chord, converter, dynamics, meter, note, tempo
 
 from bitty.model import Note, Score
 
@@ -21,10 +21,11 @@ def ingest(path: str | Path) -> Score:
 
     notes: list[Note] = []
     for part_index, part in enumerate(parsed.parts):
+        marks = _dynamic_marks(part)
         for element in part.flatten().notes:
             start = float(element.offset) * seconds_per_quarter
             dur = float(element.duration.quarterLength) * seconds_per_quarter
-            velocity = _velocity_of(element)
+            velocity = _velocity_of(element, _velocity_at(marks, float(element.offset)))
             beat_strength = _beat_strength_of(element)
             for pitch in _pitches_of(element):
                 notes.append(
@@ -55,9 +56,32 @@ def _pitches_of(element) -> list[int]:
     return []
 
 
-def _velocity_of(element) -> int:
+def _dynamic_marks(part) -> list[tuple[float, int]]:
+    """(offset, velocity) for each written dynamic in this part, in order."""
+    marks = [
+        (float(mark.offset), max(1, min(127, round(mark.volumeScalar * 127))))
+        for mark in part.flatten().getElementsByClass(dynamics.Dynamic)
+    ]
+    marks.sort(key=lambda pair: pair[0])
+    return marks
+
+
+def _velocity_at(marks: list[tuple[float, int]], offset: float) -> int | None:
+    """The dynamic governing this offset: the last mark at or before it."""
+    governing = None
+    for mark_offset, velocity in marks:
+        if mark_offset > offset + 1e-9:
+            break
+        governing = velocity
+    return governing
+
+
+def _velocity_of(element, written: int | None) -> int:
+    """An explicit per-note velocity wins; a MIDI source carries one, a score does not."""
     velocity = getattr(element.volume, "velocity", None)
-    return int(velocity) if velocity is not None else DEFAULT_VELOCITY
+    if velocity is not None:
+        return int(velocity)
+    return written if written is not None else DEFAULT_VELOCITY
 
 
 def _beat_strength_of(element) -> float:

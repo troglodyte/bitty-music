@@ -3,6 +3,7 @@ from pathlib import Path
 from bitty.ingest import ingest
 
 FIXTURE = Path(__file__).parent / "fixtures" / "two_part.musicxml"
+MINUET = Path(__file__).parent / "fixtures" / "minuet.mxl"
 
 
 def test_ingest_reads_every_note():
@@ -41,3 +42,20 @@ def test_ingest_records_metric_position():
     assert downbeat and offbeat
     assert all(n.beat_strength == 1.0 for n in downbeat)
     assert all(n.beat_strength < 1.0 for n in offbeat)
+
+
+def test_ingest_reads_written_dynamics():
+    """A score marked f then p should not come out uniformly loud."""
+    score = ingest(MINUET)
+    assert len({n.velocity for n in score.notes}) > 1
+
+
+def test_ingest_holds_a_dynamic_until_the_next_mark():
+    """A mark governs every following note in its own part, not just one."""
+    score = ingest(MINUET)
+    # Part 2 is marked f at offset 8.0 and p at 25.0; the p is quieter.
+    part = [n for n in score.notes if n.part == 2]
+    under_f = [n for n in part if 4.0 <= n.start < 12.0]
+    under_p = [n for n in part if n.start >= 12.5]
+    assert under_f and under_p
+    assert max(n.velocity for n in under_p) < min(n.velocity for n in under_f)
