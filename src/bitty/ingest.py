@@ -36,12 +36,18 @@ def _bars(parsed, seconds_per_quarter: float) -> tuple[Bar, ...]:
     changes, so both carry forward. Reading measures rather than a flattened
     score matters: flattening reports each signature once per part, at
     offsets that do not identify a bar.
+
+    The carry-forward seeds from the score's own first signature, not a
+    hardcoded default. A score that states its signature after part 0's
+    first measure — a pickup, or a signature declared on another part —
+    would otherwise show a false change at that bar, opening a section the
+    composer never marked.
     """
     if not parsed.parts:
         return ()
 
-    time_signature = (4, 4)
-    sharps = 0
+    time_signature = _first_time_signature(parsed)
+    sharps = _first_key_signature(parsed)
     bars: list[Bar] = []
     for measure in parsed.parts[0].getElementsByClass(stream.Measure):
         if measure.timeSignature is not None:
@@ -232,6 +238,13 @@ def _first_time_signature(parsed) -> tuple[int, int]:
     for signature in signatures:
         return (int(signature.numerator), int(signature.denominator))
     return (4, 4)
+
+
+def _first_key_signature(parsed) -> int:
+    signatures = parsed.flatten().getElementsByClass(key.KeySignature)
+    for signature in signatures:
+        return int(signature.sharps)
+    return 0
 
 
 def _title_of(parsed, path: Path) -> str:

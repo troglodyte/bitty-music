@@ -7,6 +7,7 @@ from bitty.model import Bar, Score
 CHORALE = Path(__file__).parent / "fixtures" / "chorale.mxl"
 MINUET = Path(__file__).parent / "fixtures" / "minuet.mxl"
 RAGTIME = Path(__file__).parent / "fixtures" / "ragtime.mxl"
+LATE_SIGNATURE = Path(__file__).parent / "fixtures" / "late_signature.musicxml"
 
 
 def test_detects_each_half_of_the_minuet_separately():
@@ -23,6 +24,18 @@ def test_detects_the_key_of_a_whole_score():
 
 def test_a_window_with_no_notes_has_no_key():
     assert _key_of(ingest(CHORALE), 100.0, 200.0) == UNKNOWN_KEY
+
+
+def test_a_signature_stated_late_does_not_open_a_phantom_section():
+    """The fixture's only signature statement is on bar 2, not bar 1.
+
+    Nothing in this score ever changes meter or key — it's 3/4 with 2 sharps
+    throughout. A boundary here would come from a hardcoded seed disagreeing
+    with the score, not from any mark the composer wrote, which is exactly
+    what this phase promises never happens.
+    """
+    sections = analyze(ingest(LATE_SIGNATURE))
+    assert ranges(sections) == [(1, 2)]
 
 
 def timeline(count: int, **marks) -> tuple[Bar, ...]:

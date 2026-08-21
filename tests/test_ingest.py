@@ -9,6 +9,7 @@ MINUET = Path(__file__).parent / "fixtures" / "minuet.mxl"
 ORNAMENTS = Path(__file__).parent / "fixtures" / "ornaments.musicxml"
 CHORALE = Path(__file__).parent / "fixtures" / "chorale.mxl"
 RAGTIME = Path(__file__).parent / "fixtures" / "ragtime.mxl"
+LATE_SIGNATURE = Path(__file__).parent / "fixtures" / "late_signature.musicxml"
 
 
 def test_ingest_reads_every_note():
@@ -156,3 +157,17 @@ def test_ragtime_repeats_bracket_the_whole_strain():
 
 def test_a_score_without_repeat_marks_has_none():
     assert not any(b.starts_repeat or b.ends_repeat for b in ingest(CHORALE).bars)
+
+
+def test_bars_seed_their_signature_from_the_score_not_a_default():
+    """The fixture states 3/4 and 2 sharps only from bar 2 onward.
+
+    Bar 1 carries no signature of its own, but the piece is in 3/4 with 2
+    sharps throughout — that's what the score actually says, not the 4/4 and
+    0 sharps a hardcoded seed would guess. Seeding from a constant instead of
+    the score would make bar 1 look like it differs from bar 2, when nothing
+    in the notation says the meter or key ever changes.
+    """
+    score = ingest(LATE_SIGNATURE)
+    assert all(b.time_signature == (3, 4) for b in score.bars)
+    assert all(b.sharps == 2 for b in score.bars)
