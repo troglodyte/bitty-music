@@ -21,6 +21,34 @@ This puts a `bitty` command on the path.
 
 ## Commands
 
+### `bitty sections` — what's in the score
+
+```bash
+bitty sections score.mxl
+```
+
+Prints the structure the score's own marks describe, so you can see what
+there is before choosing any of it:
+
+```
+minuet  ·  q=120  ·  16 bars  ·  24.0s
+
+  A   bars   1-8    3/4   G major     0:00.0    12.0s   repeat
+  B   bars   9-16   3/4   D major     0:12.0    12.0s   repeat
+```
+
+Boundaries come only from notation — repeat marks, final and double bars,
+and key or time signature changes — so every one can be traced to something
+a composer wrote. A piece with none of those marks reports as one section,
+which for an eight-bar hymn is the honest answer rather than a failure.
+
+Section names are positional. `A` and `B` mean first and second, not "these
+two are related" — telling repeated material apart needs analysis this
+command deliberately does not do.
+
+The key is detected, not read off the key signature, which is how the minuet
+above shows its second half modulating to the dominant.
+
 ### `bitty convert` — score in, audio out
 
 ```bash
@@ -180,8 +208,9 @@ leading, which is a reason to stop — not to lower the threshold.
 
 ## Status
 
-Phases 1–3b are done: ingest, synthesis, the reduction, and articulation.
-Phase 4 picks up structure — section analysis and looping.
+Phases 1–4a are done: ingest, synthesis, the reduction, articulation, and
+structural analysis. Phase 4b picks up looping — the loop cascade, `--bars`
+and `--loop-from`, and the intro/loop split.
 
 Design documents and per-phase implementation plans live in
 `docs/superpowers/`.

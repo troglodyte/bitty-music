@@ -5,6 +5,7 @@ from pathlib import Path
 import soundfile as sf
 import typer
 
+from bitty.analyze import analyze
 from bitty.arrange import arrange
 from bitty.arrangement import Arrangement
 from bitty.ingest import ingest
@@ -19,6 +20,34 @@ ARRANGEMENT_SUFFIX = ".arrangement.json"
 @app.callback()
 def main() -> None:
     """Keep subcommand dispatch rather than folding a lone command into the root."""
+
+
+@app.command()
+def sections(
+    score: Path = typer.Argument(..., exists=True, dir_okay=False, readable=True),
+) -> None:
+    """Print the structure the score's own marks describe."""
+    parsed = ingest(score)
+    found = analyze(parsed)
+    total = found[-1].end if found else 0.0
+
+    typer.echo(
+        f"\n{parsed.title}  ·  q={parsed.bpm:g}"
+        f"  ·  {len(parsed.bars)} bars  ·  {total:.1f}s\n"
+    )
+    for section in found:
+        meter = f"{section.time_signature[0]}/{section.time_signature[1]}"
+        typer.echo(
+            f"  {section.name:<3} "
+            f"bars {section.first_bar:>3}-{section.last_bar:<4} "
+            f"{meter:<5} {section.key:<10} "
+            f"{_clock(section.start)}   {section.end - section.start:>5.1f}s"
+            f"{'   repeat' if section.repeats else ''}"
+        )
+
+
+def _clock(seconds: float) -> str:
+    return f"{int(seconds // 60)}:{seconds % 60:04.1f}"
 
 
 @app.command()

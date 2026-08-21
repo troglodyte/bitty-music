@@ -10,6 +10,8 @@ from bitty.arrangement import Arrangement
 from bitty.cli import app
 
 FIXTURE = Path(__file__).parent / "fixtures" / "two_part.musicxml"
+CHORALE = Path(__file__).parent / "fixtures" / "chorale.mxl"
+MINUET = Path(__file__).parent / "fixtures" / "minuet.mxl"
 runner = CliRunner()
 
 
@@ -98,3 +100,28 @@ def test_render_rejects_a_missing_arrangement(tmp_path):
         app, ["render", str(tmp_path / "nope.arrangement.json"), "-o", str(tmp_path)]
     )
     assert result.exit_code != 0
+
+
+def test_sections_reports_the_two_halves_of_the_minuet():
+    result = runner.invoke(app, ["sections", str(MINUET)])
+    assert result.exit_code == 0, result.output
+    assert "bars   1-8" in result.output
+    assert "bars   9-16" in result.output
+    assert "G major" in result.output
+    assert "D major" in result.output
+    assert result.output.count("repeat") == 2
+
+
+def test_sections_header_carries_the_tempo_and_length():
+    result = runner.invoke(app, ["sections", str(MINUET)])
+    assert "q=120" in result.output
+    assert "16 bars" in result.output
+    assert "24.0s" in result.output
+
+
+def test_sections_reports_an_unmarked_score_as_one_section():
+    """A hymn with no repeat marks has no interior structure to find."""
+    result = runner.invoke(app, ["sections", str(CHORALE)])
+    assert result.exit_code == 0, result.output
+    assert "bars   1-8" in result.output
+    assert "repeat" not in result.output
