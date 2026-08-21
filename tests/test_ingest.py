@@ -134,3 +134,25 @@ def test_bars_carry_the_signatures_forward():
 def test_bar_durations_track_the_meter():
     assert ingest(CHORALE).bars[0].dur == 2.0    # 4/4 at 120
     assert ingest(RAGTIME).bars[0].dur == 1.2    # 2/4 at 100
+
+
+def test_bars_record_the_repeat_marks():
+    bars = {b.number: b for b in ingest(MINUET).bars}
+    assert bars[8].ends_repeat
+    assert bars[9].starts_repeat
+    assert not bars[1].starts_repeat
+
+
+def test_an_end_repeat_also_reads_as_a_span_end():
+    """music21 gives an end repeat the barline type "final"; both flags set."""
+    assert {b.number: b for b in ingest(MINUET).bars}[8].ends_span
+
+
+def test_ragtime_repeats_bracket_the_whole_strain():
+    bars = {b.number: b for b in ingest(RAGTIME).bars}
+    assert bars[1].starts_repeat
+    assert bars[16].ends_repeat
+
+
+def test_a_score_without_repeat_marks_has_none():
+    assert not any(b.starts_repeat or b.ends_repeat for b in ingest(CHORALE).bars)

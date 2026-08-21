@@ -24,6 +24,9 @@ class Bar:
     dur: float  # seconds
     time_signature: tuple[int, int]
     sharps: int  # key signature, -7..7
+    starts_repeat: bool = False  # left barline is a start repeat
+    ends_repeat: bool = False  # right barline is an end repeat
+    ends_span: bool = False  # right barline is final or double
 
 
 @dataclass(frozen=True)
