@@ -195,13 +195,24 @@ Constants take the spec's values: 25 cents depth, 300 ms delay, 500 ms minimum
 note. The delay is what keeps this from sounding seasick; vibrato from the
 instant of attack is the characteristic way this effect goes wrong.
 
-**Open structural question, deliberately not answered here.** Whether the LFO
-is a new module or belongs in `envelope.py` is a boundary decision, and
-`envelope.py` is specifically about *step sequences* — a continuous LFO is a
-different idea wearing a similar name. Per the repository's standing
-instruction, the `design-patterns` dialog runs on this boundary before the
-implementation plan fixes it. The spec deliberately describes the behaviour and
-leaves the file layout to that dialog.
+### Structure, settled in dialog (2026-08-21)
+
+The axis is *kinds of pitch modulation*, and it stops at two: `pitch_env`, a
+step sequence in semitones, and vibrato, a delayed sine in cents. Both multiply
+the same `inc` in `_add_event`. Nothing on the roadmap adds a third — the
+spec's articulation rules list vibrato and nothing else.
+
+**The direct version wins.** A pure function `vibrato_cents(length,
+sample_rate) -> np.ndarray`, folded into `inc` exactly as `pitch_env` already
+is. A `Modulator` protocol with `StepEnvelope` and `VibratoLFO` behind it was
+considered and rejected on the record: one implementor each, and the two are
+not interchangeable at the call site anyway, so nothing would ever iterate over
+them polymorphically.
+
+It lives in a **new `src/bitty/lfo.py`**, joining `osc`, `envelope` and
+`filters` as pure functions of arrays. Not in `envelope.py`, whose docstring
+makes a deliberate stylistic commitment — *"Tracker-style step envelopes... Not
+ADSR, on purpose"* — that a continuous sine is exactly the exception to.
 
 ## Verification
 
