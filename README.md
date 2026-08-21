@@ -33,8 +33,8 @@ there is before choosing any of it:
 ```
 minuet  ·  q=120  ·  16 bars  ·  24.0s
 
-  A   bars   1-8    3/4   G major     0:00.0    12.0s   repeat
-  B   bars   9-16   3/4   D major     0:12.0    12.0s   repeat
+  A   bars   1-8    3/4   G major    0:00.0    12.0s   repeat
+  B   bars   9-16   3/4   D major    0:12.0    12.0s   repeat
 ```
 
 Boundaries come only from notation — repeat marks, final and double bars,
