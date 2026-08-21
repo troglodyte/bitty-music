@@ -1,10 +1,12 @@
 """Command-line entry point."""
 
+from dataclasses import replace
 from pathlib import Path
 
 import soundfile as sf
 import typer
 
+from bitty import loop as loop_stage
 from bitty.analyze import analyze
 from bitty.arrange import arrange
 from bitty.arrangement import Arrangement
@@ -55,14 +57,56 @@ def convert(
     score: Path = typer.Argument(..., exists=True, dir_okay=False, readable=True),
     out_dir: Path = typer.Option(Path("out"), "-o", "--out-dir"),
     wav: bool = typer.Option(False, "--wav", help="Write uncompressed WAV instead of Ogg."),
+    bars: str = typer.Option(None, "--bars", help="Printed bar range to keep, e.g. 9-16."),
+    loop_from: int = typer.Option(
+        None, "--loop-from", help="Printed bar the loop starts at. Overrides the cascade."
+    ),
 ) -> None:
     """Convert a score to audio and its arrangement JSON."""
-    arrangement = arrange(ingest(score))
-    _write_audio(arrangement, out_dir, score.stem, wav)
+    parsed = ingest(score)
+    if bars:
+        first, last = _bar_range(bars)
+        try:
+            parsed = loop_stage.trim(parsed, first, last)
+        except ValueError as error:
+            raise typer.BadParameter(str(error), param_hint="--bars") from error
+
+    try:
+        candidates = loop_stage.candidates(parsed, analyze(parsed), loop_from)
+    except ValueError as error:
+        raise typer.BadParameter(str(error), param_hint="--loop-from") from error
+
+    arrangement = arrange(parsed)
+    audio = render_audio(arrangement)
+    chosen = loop_stage.choose(candidates, audio, arrangement, SAMPLE_RATE)
+    arrangement = replace(arrangement, loop=chosen.loop if chosen else None)
+
+    _write_audio(audio, out_dir, score.stem, wav)
+    _report(chosen)
 
     json_path = out_dir / f"{score.stem}{ARRANGEMENT_SUFFIX}"
     json_path.write_text(arrangement.to_json())
     typer.echo(f"{json_path}")
+
+
+def _bar_range(text: str) -> tuple[int, int]:
+    first, _, last = text.partition("-")
+    try:
+        return int(first), int(last)
+    except ValueError as error:
+        raise typer.BadParameter(
+            f"expected a printed bar range like 9-16, got {text!r}", param_hint="--bars"
+        ) from error
+
+
+def _report(chosen) -> None:
+    if chosen is None:
+        typer.echo("  no loop found — try --loop-from BAR")
+        return
+    typer.echo(
+        f"  loop: bars {chosen.candidate.first_bar}-{chosen.candidate.last_bar}"
+        f"  ({chosen.describe()})"
+    )
 
 
 @app.command()
@@ -72,17 +116,12 @@ def render(
     wav: bool = typer.Option(False, "--wav", help="Write uncompressed WAV instead of Ogg."),
 ) -> None:
     """Re-render a hand-edited arrangement, skipping analysis entirely."""
-    _write_audio(
-        Arrangement.from_json(arrangement.read_text()),
-        out_dir,
-        _stem(arrangement),
-        wav,
-    )
+    loaded = Arrangement.from_json(arrangement.read_text())
+    _write_audio(render_audio(loaded), out_dir, _stem(arrangement), wav)
 
 
-def _write_audio(arrangement: Arrangement, out_dir: Path, stem: str, wav: bool) -> Path:
+def _write_audio(audio, out_dir: Path, stem: str, wav: bool) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
-    audio = render_audio(arrangement)
     path = out_dir / f"{stem}{'.wav' if wav else '.ogg'}"
 
     if wav:
