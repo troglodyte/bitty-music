@@ -243,7 +243,14 @@ that the dynamics work landed at all.
   carries no written dynamics.
 - Sustained notes vibrate after a delay; notes under the minimum do not.
 - Lead and bass purity hold at or above the percentages 3a's acceptance listen
-  recorded, and octave-plus leaps at or below its counts.
+  recorded, and octave-plus leaps at or below the baseline measured on `main`
+  before this phase starts.
+
+  > 3a recorded its purity percentages in prose and they reproduce exactly, so
+  > those numbers carry over. Its *leap* counts do not reproduce, because the
+  > metric behind them was never written down. Phase 3b therefore checks the
+  > metric in as code and takes its baseline from `main`, so the next phase
+  > inherits a number it can actually re-measure.
 - `bitty render` still round-trips a hand-edited arrangement, now including
   `vibrato`.
 - The acceptance listen has happened and its outcome is recorded.
