@@ -61,6 +61,7 @@ def convert(
     loop_from: int = typer.Option(
         None, "--loop-from", help="Printed bar the loop starts at. Overrides the cascade."
     ),
+    split: bool = typer.Option(False, "--split", help="Also write STEM_intro and STEM_loop."),
 ) -> None:
     """Convert a score to audio and its arrangement JSON."""
     parsed = ingest(score)
@@ -83,6 +84,8 @@ def convert(
 
     _write_audio(audio, out_dir, score.stem, wav)
     _report(chosen)
+    if split:
+        _write_split(audio, arrangement, out_dir, score.stem, wav)
 
     json_path = out_dir / f"{score.stem}{ARRANGEMENT_SUFFIX}"
     json_path.write_text(arrangement.to_json())
@@ -114,10 +117,14 @@ def render(
     arrangement: Path = typer.Argument(..., exists=True, dir_okay=False, readable=True),
     out_dir: Path = typer.Option(Path("out"), "-o", "--out-dir"),
     wav: bool = typer.Option(False, "--wav", help="Write uncompressed WAV instead of Ogg."),
+    split: bool = typer.Option(False, "--split", help="Also write STEM_intro and STEM_loop."),
 ) -> None:
     """Re-render a hand-edited arrangement, skipping analysis entirely."""
     loaded = Arrangement.from_json(arrangement.read_text())
-    _write_audio(render_audio(loaded), out_dir, _stem(arrangement), wav)
+    audio = render_audio(loaded)
+    _write_audio(audio, out_dir, _stem(arrangement), wav)
+    if split:
+        _write_split(audio, loaded, out_dir, _stem(arrangement), wav)
 
 
 def _write_audio(audio, out_dir: Path, stem: str, wav: bool) -> Path:
@@ -131,6 +138,30 @@ def _write_audio(audio, out_dir: Path, stem: str, wav: bool) -> Path:
 
     typer.echo(f"{path}  ({len(audio) / SAMPLE_RATE:.1f}s)")
     return path
+
+
+def _write_split(audio, arrangement: Arrangement, out_dir: Path, stem: str, wav: bool) -> None:
+    """Write the intro and loop as separate files.
+
+    A hard error without a loop: asking for a split is asking for a loop, and
+    quietly writing one file instead is the kind of thing a build script misses.
+
+    Audio past the loop end is dropped. With the suffix candidates the cascade
+    prefers that is nothing; a repeat span in the middle of a piece leaves a
+    tail that survives in the single file and not here.
+    """
+    if arrangement.loop is None:
+        typer.echo("  --split needs a loop and none was found — try --loop-from BAR", err=True)
+        raise typer.Exit(1)
+
+    first = round(arrangement.loop.start_sec * SAMPLE_RATE)
+    last = min(round(arrangement.loop.end_sec * SAMPLE_RATE), len(audio))
+
+    if first > 0:
+        _write_audio(audio[:first], out_dir, f"{stem}_intro", wav)
+    else:
+        typer.echo("  loop starts at 0:00 — no intro to write")
+    _write_audio(audio[first:last], out_dir, f"{stem}_loop", wav)
 
 
 def _stem(path: Path) -> str:

@@ -181,3 +181,48 @@ def test_a_malformed_bar_range_is_rejected(tmp_path):
 def test_a_bar_range_outside_the_score_is_rejected(tmp_path):
     result = runner.invoke(app, ["convert", str(MINUET), "-o", str(tmp_path), "--bars", "40-50"])
     assert result.exit_code != 0
+
+
+def test_split_writes_an_intro_and_a_loop(tmp_path):
+    result = runner.invoke(
+        app, ["convert", str(MINUET), "-o", str(tmp_path), "--wav", "--split", "--loop-from", "9"]
+    )
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / "minuet_intro.wav").exists()
+    assert (tmp_path / "minuet_loop.wav").exists()
+
+
+def test_the_split_pieces_have_the_durations_the_loop_names(tmp_path):
+    runner.invoke(
+        app, ["convert", str(MINUET), "-o", str(tmp_path), "--wav", "--split", "--loop-from", "9"]
+    )
+    intro, _ = sf.read(tmp_path / "minuet_intro.wav")
+    body, _ = sf.read(tmp_path / "minuet_loop.wav")
+    assert abs(len(intro) / 44100 - 12.0) < 0.01
+    assert abs(len(body) / 44100 - 12.0) < 0.01
+
+
+def test_a_loop_starting_at_zero_writes_no_intro(tmp_path):
+    result = runner.invoke(app, ["convert", str(MINUET), "-o", str(tmp_path), "--wav", "--split"])
+    assert result.exit_code == 0, result.output
+    assert not (tmp_path / "minuet_intro.wav").exists()
+    assert (tmp_path / "minuet_loop.wav").exists()
+    assert "no intro" in result.output.lower()
+
+
+def test_split_without_a_loop_is_a_hard_error(tmp_path):
+    """Asking for a split is asking for a loop. A warning here gets missed."""
+    result = runner.invoke(app, ["convert", str(FIXTURE), "-o", str(tmp_path), "--split"])
+    assert result.exit_code == 1
+    assert "--loop-from" in result.output
+
+
+def test_render_can_split_a_hand_edited_arrangement(tmp_path):
+    runner.invoke(app, ["convert", str(MINUET), "-o", str(tmp_path), "--loop-from", "9"])
+    result = runner.invoke(
+        app,
+        ["render", str(tmp_path / "minuet.arrangement.json"), "-o", str(tmp_path),
+         "--wav", "--split"],
+    )
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / "minuet_loop.wav").exists()
