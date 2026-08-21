@@ -99,15 +99,21 @@ def _from_repeats(bars: tuple[Bar, ...]) -> list[LoopCandidate]:
     form whose closing repeat dots the engraving omits, as the minuet fixture
     does — closes at the last bar rather than vanishing. Longest first: a
     loop wants the substantial repeated body, not an incidental four-bar echo.
+
+    A bar can carry both marks at once — `:||:` between two repeated
+    sections — so closing has to happen before opening. Otherwise the new
+    `opening` overwrites the old one before it is ever paired, and the span
+    that should have ended there silently swallows everything back to its own
+    start (or bar one) instead.
     """
     pairs: list[tuple[Bar, Bar]] = []
     opening: Bar | None = None
     for bar in bars:
-        if bar.starts_repeat:
-            opening = bar
         if bar.ends_repeat:
             pairs.append((opening or bars[0], bar))
             opening = None
+        if bar.starts_repeat:
+            opening = bar
     if opening is not None:
         pairs.append((opening, bars[-1]))
 

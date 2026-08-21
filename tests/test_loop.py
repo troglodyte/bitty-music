@@ -105,6 +105,19 @@ def test_a_repeat_span_under_the_floor_is_dropped():
     assert all(s[2] != "repeat" for s in spans(loop.candidates(score, analyze(score))))
 
 
+def test_a_bar_carrying_both_marks_closes_the_open_span_before_starting_a_new_one():
+    """`:||:` between two repeated sections must not swallow the first span.
+
+    Bar 9 both ends the first repeat and opens the second. Closing before
+    opening yields two spans, (1, 9) and (9, 17); opening before closing would
+    overwrite bar 1's opening with bar 9's before it is ever paired, losing
+    the first span into a single spurious (1, 17).
+    """
+    score = synthetic(timeline(17, starts_repeat={1, 9}, ends_repeat={9, 17}))
+    repeats = [s for s in spans(loop.candidates(score, analyze(score))) if s[2] == "repeat"]
+    assert repeats == [(1, 9, "repeat"), (9, 17, "repeat")]
+
+
 def test_sections_fall_through_as_suffixes_whole_piece_first():
     score = synthetic(timeline(24, ends_span={8, 16}))
     sections = [s for s in spans(loop.candidates(score, analyze(score))) if s[2] == "section"]
