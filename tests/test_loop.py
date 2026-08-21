@@ -202,10 +202,13 @@ def test_a_period_aligned_splice_passes_despite_full_amplitude_edges():
     audio = pulse(2.0, hz=100.0)  # 100 Hz: 0.5 s is a whole number of periods
     chosen = loop.choose((candidate(0.5, 1.5),), audio, bare(), SAMPLE_RATE)
     assert chosen is not None
-    # A hard zero-crossing 100 periods out: sin(2*pi*100*t) at t=0.5 and t=1.5
-    # round to tiny values of opposite sign, so the splice ties the ordinary
-    # edge magnitude exactly rather than falling under it. choose() accepts on
-    # <=, matching that boundary.
+    # The loop length is a whole number of periods, so the splice compares
+    # audio[first], a zero-crossing sample at t=0.5, against audio[last - 1],
+    # one sample short of realigning with it - deep in the opposite
+    # half-period, clipped to the full -0.5. That pairing is definitionally
+    # an ordinary sign-flip edge, the same shape as every edge in the
+    # percentile population, so the ratio lands exactly at the threshold
+    # rather than under it. choose() accepts on <=, matching that boundary.
     assert chosen.ratio <= loop.SEAM_RATIO
 
 
