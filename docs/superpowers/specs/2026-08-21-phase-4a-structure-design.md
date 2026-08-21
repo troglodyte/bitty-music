@@ -162,7 +162,7 @@ vocabulary:
 |---|---|
 | `starts_repeat` | left barline is a `Repeat` with `direction == "start"` |
 | `ends_repeat` | right barline is a `Repeat` with `direction == "end"` |
-| `ends_span` | right barline `type` in `{"final", "double", "light-light"}` |
+| `ends_span` | right barline `type` in `{"final", "double"}` |
 
 A repeat barline carries an ordinary `type` as well — an end repeat's is
 `final`, a start repeat's is `heavy-light` — so minuet bar 8 sets both

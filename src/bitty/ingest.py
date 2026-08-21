@@ -12,7 +12,7 @@ DEFAULT_BPM = 120.0
 DEFAULT_VELOCITY = 64
 NEUTRAL_BEAT_STRENGTH = 0.5
 GRACE_SEC = 0.032
-SPAN_BARLINES = frozenset({"final", "double", "light-light"})
+SPAN_BARLINES = frozenset({"final", "double"})
 
 
 def _is_repeat(barline, direction: str) -> bool:
