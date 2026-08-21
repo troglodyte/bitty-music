@@ -194,19 +194,39 @@ splice   = max(abs(audio[loop_start] - audio[loop_end - 1]))
 
 A candidate fails when `splice > ordinary * SEAM_RATIO` — when the join
 does something the music itself never does. Self-calibrating per piece,
-one free constant, no absolute dB value to guess at.
+one free constant, no absolute dB value to guess at. `SEAM_RATIO = 1.0`;
+see "Calibration" for the measurements behind it.
 
 ### Test 2 — cut phrase, in the event domain
 
-An event whose sounding span crosses `loop_end` fails the candidate,
-unless the same pitch is also sounding at `loop_start` — in which case the
-splice continues the note rather than severing it.
+A **dry** event whose sounding span crosses `loop_end` fails the
+candidate, unless the same pitch is also sounding at `loop_start` — in
+which case the splice continues the note rather than severing it.
 
-"Sounding span" includes the echo tail: for a channel with echo, the
-effective end is `e.t + e.dur + echo.delay_sec`. This is the part that
-earns the test. An echo tail bleeding past the loop end is the most common
-real cause of a chiptune loop sounding wrong, and it is computable exactly
-from the arrangement rather than inferred from a waveform.
+An event ending *exactly* at `loop_end` does not cross. Onset times are
+floats, so the comparison is `e.t + e.dur > loop_end + EPSILON`, matching
+`arrange.EPSILON = 1e-6`. Written the other way it counts every final
+note as severed, which is wrong on every bar-aligned candidate there is.
+
+### The echo tail is reported, not rejected
+
+An earlier draft of this spec folded the echo tail into Test 2: effective
+end `e.t + e.dur + echo.delay_sec`. Measurement killed it. The lead's
+final note echoes 0.38–0.45 s past the loop end on chorale, on ragtime,
+and on the minuet's second half — so that clause rejects every candidate
+on two of the three fixtures, and the feature ships dead.
+
+The clause was pointing at something real. The tail measures −11 to
+−14 dB against the body RMS, which is audible: each loop cycle drops the
+final note's echo. But every loop in a piece with echo has one, so
+rejection is the wrong response. The seam report prints the tail level;
+the cascade ignores it.
+
+The alternative — wrapping the tail, adding `audio[loop_end:loop_end+tail]`
+into the head of the loop region so the echo sounds over the loop start as
+it would on a real repeat — is musically the better answer and is
+deliberately deferred. It modifies rendered audio, which this phase does
+not do. Revisit it after auditioning what the unwrapped loop sounds like.
 
 The two tests are complementary by domain: the first sees what the
 synthesizer did, the second sees what the music meant.
@@ -313,14 +333,25 @@ All three fixtures regenerate for `loop` and `meta.bars`, reviewed as a
 diff. Round-trip: `bitty render` on an arrangement carrying a loop
 preserves it byte-identically.
 
-### Calibration
+### Calibration — measured, 2026-08-21
 
 `SEAM_RATIO` is the only free number, since the percentile normalizes per
-piece. During implementation, measure the real ratio at every candidate
-the cascade generates across all three fixtures, choose a threshold with
-clear headroom between the passing and failing populations, and record the
-measured numbers in the plan — the discipline `test_quality.py` already
-uses for the reduction baselines.
+piece. It was measured before this spec was finalized, across every
+candidate the cascade generates on all three fixtures.
+
+| Population | Ratio |
+|---|---|
+| Bar-aligned candidates (all fixtures, every tier) | 0.02 – 0.38 |
+| Arbitrary splice points, 400 random pairs per fixture | median 0.54–0.80, p90 1.07–1.67, max 2.97 |
+| Fraction of arbitrary splices above 1.0 | 15% – 40% |
+
+**`SEAM_RATIO = 1.0`** — roughly 2.6× headroom above the worst real
+candidate, while still rejecting a large share of arbitrary joins. Per
+fixture, `ordinary` (the 99.9th-percentile adjacent-sample step) is
+chorale 0.266, minuet 0.420, ragtime 0.455.
+
+Dry-note crossings on bar-aligned candidates: **zero**, on every fixture,
+at every tier. Test 2 guards without misfiring.
 
 ### Audition
 
@@ -337,10 +368,14 @@ actually works.
   population to draw a threshold from. Mitigated by choosing headroom
   rather than a tight fit, and by the fact that a wrong rejection is
   recoverable with `--loop-from` while a wrong acceptance is audible.
-- **Test 2 rejects on any sustained note crossing the boundary.** A piece
-  with a pedal bass under a section boundary may lose candidates it
+- **Test 2 rejects on any sustained dry note crossing the boundary.** A
+  piece with a pedal bass under a section boundary may lose candidates it
   arguably should keep. Bar-aligned loop points usually land where notes
-  end; when they do not, that is a real seam problem, not a false one.
+  end — measured zero crossings across all three fixtures — so when one
+  does cross, that is a real seam problem rather than a false alarm.
+- **Every loop drops the final note's echo**, at −11 to −14 dB. Accepted
+  for this phase and reported rather than hidden. Tail-wrapping is the
+  fix if the audition says it matters.
 - **Selection sees only the trimmed score.** `--bars` narrows what the
   cascade can consider. Intentional — it is a manual instruction — but a
   too-narrow `--bars` can leave nothing above the 8-bar floor, which
