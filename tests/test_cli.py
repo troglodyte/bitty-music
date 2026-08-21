@@ -109,7 +109,7 @@ def test_sections_reports_the_two_halves_of_the_minuet():
     assert "bars   9-16" in result.output
     assert "G major" in result.output
     assert "D major" in result.output
-    assert result.output.count("repeat") == 2
+    assert result.output.count("repeat") == 3
 
 
 def test_sections_header_carries_the_tempo_and_length():
@@ -226,3 +226,25 @@ def test_render_can_split_a_hand_edited_arrangement(tmp_path):
     )
     assert result.exit_code == 0, result.output
     assert (tmp_path / "minuet_loop.wav").exists()
+
+
+def test_sections_prints_the_auto_loop_pick():
+    result = runner.invoke(app, ["sections", str(MINUET)])
+    assert result.exit_code == 0, result.output
+    assert "auto-loop pick: bars 1-8" in result.output
+    assert "repeat marks, seam ok" in result.output
+
+
+def test_the_printed_pick_is_the_one_convert_would_write(tmp_path):
+    """Rendering makes the report slow. It is worth it only if it is true."""
+    printed = runner.invoke(app, ["sections", str(RAGTIME)]).output
+    converted = runner.invoke(app, ["convert", str(RAGTIME), "-o", str(tmp_path)]).output
+    assert "auto-loop pick: bars 1-16" in printed
+    assert "loop: bars 1-16" in converted
+    written = loaded(tmp_path, "ragtime").loop
+    assert (written.start_sec, round(written.end_sec, 2)) == (0.0, 19.2)
+
+
+def test_sections_says_so_when_nothing_can_loop():
+    result = runner.invoke(app, ["sections", str(FIXTURE)])
+    assert "no loop" in result.output.lower()

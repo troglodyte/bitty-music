@@ -47,6 +47,22 @@ def sections(
             f"{'   repeat' if section.repeats else ''}"
         )
 
+    arrangement = arrange(parsed)
+    chosen = loop_stage.choose(
+        loop_stage.candidates(parsed, found),
+        render_audio(arrangement),
+        arrangement,
+        SAMPLE_RATE,
+    )
+    typer.echo("")
+    if chosen is None:
+        typer.echo("  no loop found — try convert --loop-from BAR")
+    else:
+        typer.echo(
+            f"  auto-loop pick: bars {chosen.candidate.first_bar}-{chosen.candidate.last_bar}"
+            f"  ({chosen.describe()})"
+        )
+
 
 def _clock(seconds: float) -> str:
     return f"{int(seconds // 60)}:{seconds % 60:04.1f}"
