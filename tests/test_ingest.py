@@ -1,9 +1,12 @@
 from pathlib import Path
 
+import pytest
+
 from bitty.ingest import ingest
 
 FIXTURE = Path(__file__).parent / "fixtures" / "two_part.musicxml"
 MINUET = Path(__file__).parent / "fixtures" / "minuet.mxl"
+ORNAMENTS = Path(__file__).parent / "fixtures" / "ornaments.musicxml"
 
 
 def test_ingest_reads_every_note():
@@ -59,3 +62,22 @@ def test_ingest_holds_a_dynamic_until_the_next_mark():
     under_p = [n for n in part if n.start >= 12.5]
     assert under_f and under_p
     assert max(n.velocity for n in under_p) < min(n.velocity for n in under_f)
+
+
+def test_ingest_expands_a_trill_into_fast_notes():
+    """A trill is several notes, not one held tone.
+
+    Guards a real trap: music21's stream-level realizeOrnaments() silently
+    leaves the note alone, so only a count assertion catches the regression.
+    """
+    score = ingest(ORNAMENTS)
+    first_beat = [n for n in score.notes if n.start < 0.5]  # seconds: one quarter at 120 bpm
+    assert len(first_beat) > 2
+    assert len({n.pitch for n in first_beat}) == 2, "a trill alternates two pitches"
+
+
+def test_ingest_expands_a_mordent_and_keeps_the_note_length():
+    score = ingest(ORNAMENTS)
+    second_beat = [n for n in score.notes if 0.5 <= n.start < 1.0]
+    assert len(second_beat) == 3, "mordent: upper, neighbour, then the note itself"
+    assert sum(n.dur for n in second_beat) == pytest.approx(0.5)

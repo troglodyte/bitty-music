@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from music21 import chord, converter, dynamics, meter, note, tempo
+from music21 import chord, converter, dynamics, expressions, key, meter, note, tempo
 
 from bitty.model import Note, Score
 
@@ -22,22 +22,27 @@ def ingest(path: str | Path) -> Score:
     notes: list[Note] = []
     for part_index, part in enumerate(parsed.parts):
         marks = _dynamic_marks(part)
+        key_signature = part.flatten().getElementsByClass(key.KeySignature).first()
         for element in part.flatten().notes:
-            start = float(element.offset) * seconds_per_quarter
-            dur = float(element.duration.quarterLength) * seconds_per_quarter
-            velocity = _velocity_of(element, _velocity_at(marks, float(element.offset)))
+            written = _velocity_at(marks, float(element.offset))
             beat_strength = _beat_strength_of(element)
-            for pitch in _pitches_of(element):
-                notes.append(
-                    Note(
-                        pitch=pitch,
-                        start=start,
-                        dur=dur,
-                        velocity=velocity,
-                        part=part_index,
-                        beat_strength=beat_strength,
+            cursor = float(element.offset)
+            for piece in _realized(element, key_signature):
+                start = cursor * seconds_per_quarter
+                dur = float(piece.duration.quarterLength) * seconds_per_quarter
+                cursor += float(piece.duration.quarterLength)
+                velocity = _velocity_of(piece, written)
+                for pitch in _pitches_of(piece):
+                    notes.append(
+                        Note(
+                            pitch=pitch,
+                            start=start,
+                            dur=dur,
+                            velocity=velocity,
+                            part=part_index,
+                            beat_strength=beat_strength,
+                        )
                     )
-                )
 
     notes.sort(key=lambda n: (n.start, -n.pitch))
     return Score(
@@ -54,6 +59,24 @@ def _pitches_of(element) -> list[int]:
     if isinstance(element, note.Note):
         return [int(element.pitch.midi)]
     return []
+
+
+def _realized(element, key_signature):
+    """An ornamented note as the notes it actually stands for.
+
+    music21's realize returns (before, main, after) and shortens `main` so the
+    pieces sum to the original length. A Fermata is not an Ornament and so
+    passes through untouched, which is what this phase wants.
+    """
+    for expression in element.expressions:
+        if not isinstance(expression, expressions.Ornament):
+            continue
+        try:
+            before, main, after = expression.realize(element, keySig=key_signature)
+        except Exception:
+            continue  # an ornament music21 cannot resolve stays a plain note
+        return [*before, *([main] if main is not None else []), *after]
+    return [element]
 
 
 def _dynamic_marks(part) -> list[tuple[float, int]]:
