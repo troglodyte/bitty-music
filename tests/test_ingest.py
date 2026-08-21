@@ -31,3 +31,13 @@ def test_ingest_tags_notes_with_their_source_part():
     assert bass[0].pitch == 48
     assert bass[0].start == 0.0
     assert bass[0].dur == 2.0
+
+
+def test_ingest_records_metric_position():
+    """Accent needs to know where in the bar a note falls."""
+    score = ingest(FIXTURE)
+    downbeat = [n for n in score.notes if n.start == 0.0]
+    offbeat = [n for n in score.notes if n.start == 0.5]
+    assert downbeat and offbeat
+    assert all(n.beat_strength == 1.0 for n in downbeat)
+    assert all(n.beat_strength < 1.0 for n in offbeat)

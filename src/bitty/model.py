@@ -12,6 +12,7 @@ class Note:
     dur: float  # seconds
     velocity: int  # 0-127, as written in the source
     part: int  # index of the source part or staff
+    beat_strength: float = 0.5  # 1.0 on a downbeat; see ingest for the source
 
 
 @dataclass(frozen=True)

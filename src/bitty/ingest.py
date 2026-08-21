@@ -8,6 +8,7 @@ from bitty.model import Note, Score
 
 DEFAULT_BPM = 120.0
 DEFAULT_VELOCITY = 64
+NEUTRAL_BEAT_STRENGTH = 0.5
 
 
 def ingest(path: str | Path) -> Score:
@@ -24,6 +25,7 @@ def ingest(path: str | Path) -> Score:
             start = float(element.offset) * seconds_per_quarter
             dur = float(element.duration.quarterLength) * seconds_per_quarter
             velocity = _velocity_of(element)
+            beat_strength = _beat_strength_of(element)
             for pitch in _pitches_of(element):
                 notes.append(
                     Note(
@@ -32,6 +34,7 @@ def ingest(path: str | Path) -> Score:
                         dur=dur,
                         velocity=velocity,
                         part=part_index,
+                        beat_strength=beat_strength,
                     )
                 )
 
@@ -55,6 +58,20 @@ def _pitches_of(element) -> list[int]:
 def _velocity_of(element) -> int:
     velocity = getattr(element.volume, "velocity", None)
     return int(velocity) if velocity is not None else DEFAULT_VELOCITY
+
+
+def _beat_strength_of(element) -> float:
+    """Where in the bar this note falls, per music21's metric hierarchy.
+
+    Compound meter makes this more than `offset % bar_length`, and a note with
+    no time-signature context has no metric position at all — such a note takes
+    the neutral value so it is neither accented nor trimmed.
+    """
+    try:
+        strength = element.beatStrength
+    except Exception:
+        return NEUTRAL_BEAT_STRENGTH
+    return NEUTRAL_BEAT_STRENGTH if strength is None else float(strength)
 
 
 def _first_tempo(parsed) -> float:
