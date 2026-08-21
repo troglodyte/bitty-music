@@ -4,8 +4,8 @@ This file owns routing and gain staging only. Waveforms live in `osc`,
 envelopes in `envelope`, and filtering in `filters` — each a pure function of
 arrays, which is what makes them testable as properties instead of by ear.
 
-Signal path per channel: oscillator -> pitch and volume envelopes -> edge fade
--> lowpass -> constant-power pan -> sum. Then, across the mix: echo taps, DC
+Signal path per channel: oscillator -> pitch envelope and vibrato -> volume
+envelope -> edge fade -> lowpass -> constant-power pan -> sum. Then, across the mix: echo taps, DC
 blocker, soft clip.
 """
 
@@ -16,6 +16,7 @@ import numpy as np
 from bitty.arrangement import MAX_VELOCITY, Arrangement, Channel, Event, Instrument
 from bitty.envelope import step_values
 from bitty.filters import dc_block, lowpass
+from bitty.lfo import vibrato_cents
 from bitty.osc import oscillator
 
 SAMPLE_RATE = 44100
@@ -90,6 +91,11 @@ def _add_event(
     if instrument.pitch_env:
         semitones = step_values(instrument.pitch_env, length, sample_rate)
         inc = inc * 2.0 ** (semitones / 12.0)
+
+    if event.vibrato:
+        # Composed with the pitch envelope, not replacing it: the blip is the
+        # attack, the vibrato is the sustain.
+        inc = inc * 2.0 ** (vibrato_cents(length, sample_rate) / 1200.0)
 
     phase = np.concatenate(([0.0], np.cumsum(inc)[:-1]))
     wave = oscillator(instrument.wave)(phase, inc, instrument)
