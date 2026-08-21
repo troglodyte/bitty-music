@@ -30,7 +30,6 @@ from bitty.voices import (
 )
 
 EPSILON = 1e-6  # onset times are floats; anything closer than this is one moment
-GRACE_SEC = 0.032  # music21 gives grace notes zero length; a channel needs some
 ARP_STEP_SEC = 0.016  # the spec's [arp] rate_ms = 16
 
 
@@ -42,7 +41,6 @@ class _Take:
     pitch: int
     dur: float
     vel: int
-    ornament: bool = False  # a floored grace note: it sounds, but it is not a line
 
 
 Tracks = dict[str, list[_Take]]
@@ -83,14 +81,7 @@ def _assign(score: Score) -> tuple[Tracks, list[tuple[float, list[Note]]]]:
 
     for onset, group in _by_onset(score.notes):
         used: set[str] = set()
-        # A grace note is written above the note it ornaments, so leaving it in
-        # the running would hand it the lead pin and push the actual melody onto
-        # an inner channel. Pin against the notes that have real duration; the
-        # ornaments take what is left, and Phase 3b gives them their proper shape.
-        pending = [note for note in group if note.dur > EPSILON]
-        graces = [note for note in group if note.dur <= EPSILON] if pending else []
-        if not pending:
-            pending = list(group)
+        pending = list(group)
         above = _texture(tracks, onset, without=LEAD_ROLE)
         if not above or pending[0].pitch >= max(above):
             _place(tracks[LEAD_ROLE], pending.pop(0))
@@ -102,7 +93,7 @@ def _assign(score: Score) -> tuple[Tracks, list[tuple[float, list[Note]]]]:
             used.add(BASS_ROLE)
 
         spare: list[Note] = []
-        for note in pending + graces:
+        for note in pending:
             role = _pick_middle(tracks, onset, note, used)
             if role is None:
                 spare.append(note)
@@ -130,9 +121,8 @@ def _place(takes: list[_Take], note: Note) -> None:
         _Take(
             t=note.start,
             pitch=note.pitch,
-            dur=max(note.dur, GRACE_SEC),
+            dur=note.dur,
             vel=_quantize_velocity(note.velocity),
-            ornament=note.dur <= EPSILON,
         )
     )
 
@@ -169,17 +159,8 @@ def _sounding(takes: list[_Take], t: float) -> int | None:
 
 
 def _last_pitch(takes: list[_Take]) -> int | None:
-    """The last pitch this channel actually sang, ignoring spent ornaments.
-
-    A grace note is written above the note it decorates, so a channel that
-    caught one is left holding a pitch well above its own line. Counting that
-    as the channel's voice costs the melody the lead the moment it dips below
-    the ornament, and keeps costing it until the channel next plays.
-    """
-    for take in reversed(takes):
-        if not take.ornament:
-            return take.pitch
-    return None
+    """The last pitch this channel actually sang."""
+    return takes[-1].pitch if takes else None
 
 
 def _pick_middle(tracks: Tracks, onset: float, note: Note, used: set[str]) -> str | None:

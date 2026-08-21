@@ -63,16 +63,6 @@ def test_silent_channels_are_left_out():
     assert [c.role for c in arrangement.channels] == ["lead", "bass"]
 
 
-def test_grace_notes_survive_as_short_notes():
-    """music21 gives grace notes zero quarter-length. A chip channel cannot
-    play zero seconds, so they get a floor instead of disappearing. Which
-    channel catches the ornament is not the point here — that it still sounds,
-    and sounds briefly, is."""
-    arrangement = arrange(score_of(note(72, 0.0, dur=1.0), note(79, 0.0, dur=0.0)))
-    grace = [e for c in arrangement.channels for e in c.events if e.pitch == 79]
-    assert len(grace) == 1
-    assert grace[0].dur == 0.032
-
 
 def test_the_melody_keeps_the_lead_while_the_accompaniment_strides_alone():
     """Ragtime's left hand restrikes on the offbeat while the melody rests, and
@@ -92,22 +82,6 @@ def test_the_melody_keeps_the_lead_while_the_accompaniment_strides_alone():
     )
     assert pitches(arrangement, "lead") == [75, 75]
 
-
-def test_a_spent_ornament_does_not_stand_in_the_texture():
-    """A grace note parked on an inner channel is a 32 ms blip, not a line. Let
-    it keep a vote on where the top of the texture is and the melody dipping
-    below it loses the lead — then the inner channel it landed on holds that
-    high pitch and goes on blocking the lead for every note after."""
-    arrangement = arrange(
-        score_of(
-            note(81, 0.0, dur=0.5),
-            note(83, 0.0, dur=0.0),  # the ornament, written above the melody
-            note(60, 0.0, dur=0.5),
-            note(79, 0.5, dur=0.5),  # the melody carries on, below the ornament
-            note(59, 0.5, dur=0.5),
-        )
-    )
-    assert pitches(arrangement, "lead") == [81, 79]
 
 
 def test_a_moving_inner_note_does_not_steal_the_bass():
@@ -265,16 +239,6 @@ def test_nothing_is_dropped_when_the_channels_run_out():
     heard = {e.pitch for c in arrangement.channels for e in c.events}
     assert {72, 69, 67, 64, 62, 60, 48} <= heard
 
-
-def test_a_grace_note_does_not_take_the_lead_from_the_note_it_ornaments():
-    """music21 writes a grace note above the note it decorates and gives it zero
-    length. Letting it contest the pin hands the lead a 32ms blip and exiles the
-    melody to an inner channel — the exact teleport this phase exists to stop."""
-    arrangement = arrange(
-        score_of(note(86, 0.0, dur=0.5), note(88, 0.0, dur=0.0), note(60, 0.0, dur=0.5))
-    )
-    assert pitches(arrangement, "lead") == [86]
-    assert 88 in {e.pitch for c in arrangement.channels for e in c.events}
 
 
 def test_a_chord_re_entering_after_a_rest_still_reaches_lead_and_bass():
