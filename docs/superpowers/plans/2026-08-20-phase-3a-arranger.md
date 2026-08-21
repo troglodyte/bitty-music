@@ -129,7 +129,7 @@ git checkout -b phase-3a-arranger
   bass; `LEAD_ROLE`, `BASS_ROLE`, `ARP_ROLE: str`; `MIDDLE_ROLES: tuple[str, ...]`;
   `ECHO_BEATS: float`; `ECHO_LEVEL: float`. Task 2 imports all of these.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/test_voices.py`:
 
@@ -174,12 +174,12 @@ def test_the_role_constants_point_into_the_roster():
     assert ARP_ROLE in MIDDLE_ROLES
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `.venv/bin/pytest tests/test_voices.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'bitty.voices'`
 
-- [ ] **Step 3: Write the roster**
+- [x] **Step 3: Write the roster**
 
 Create `src/bitty/voices.py`:
 
@@ -252,12 +252,12 @@ ECHO_BEATS = 0.75  # the spec's [echo] delay = "3/16" of a whole note
 ECHO_LEVEL = 0.35
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `.venv/bin/pytest tests/test_voices.py -v`
 Expected: PASS, 6 tests
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/bitty/voices.py tests/test_voices.py
@@ -285,7 +285,7 @@ notes go to the nearest last pitch — Task 3 adds the free-channel preference.
   `_quantize_velocity`, and the constants `EPSILON` and `GRACE_SEC`. Tasks 3
   and 4 modify `_pick_middle` and `_assign` respectively.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Replace the whole of `tests/test_arrange.py`:
 
@@ -450,13 +450,13 @@ def test_the_filter_stays_off_by_default():
     assert all(c.instrument.cutoff_hz is None for c in arrangement.channels)
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `.venv/bin/pytest tests/test_arrange.py -v`
 Expected: FAIL — `test_a_five_note_chord_fills_all_five_channels` reports two
 channels, `ImportError` on `bitty.voices` is already fixed by Task 1.
 
-- [ ] **Step 3: Rewrite the arranger**
+- [x] **Step 3: Rewrite the arranger**
 
 Replace the whole of `src/bitty/arrange.py`:
 
@@ -645,12 +645,12 @@ def _quantize_velocity(velocity: int) -> int:
     return max(0, min(MAX_VELOCITY, round(velocity / 127 * MAX_VELOCITY)))
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `.venv/bin/pytest tests/test_arrange.py -v`
 Expected: PASS, 15 tests
 
-- [ ] **Step 5: Run the whole suite**
+- [x] **Step 5: Run the whole suite**
 
 Run: `.venv/bin/pytest`
 Expected: PASS. `tests/test_cli.py::test_written_arrangement_reloads` asserts
@@ -658,7 +658,7 @@ the roles are `["lead", "bass"]` for the two-part fixture — that still holds,
 because empty channels are dropped. If it fails, the empty-channel filter in
 `arrange()` is wrong; fix that rather than the test.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/bitty/arrange.py tests/test_arrange.py
@@ -678,7 +678,7 @@ git commit -m "feat: assign notes across five channels by voice leading"
   — the signature gains `onset`, because "free" is a question about a moment in
   time. Task 4 calls it unchanged.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/test_arrange.py`:
 
@@ -725,14 +725,14 @@ def test_when_every_channel_is_busy_the_nearest_one_is_stolen():
     assert inner_a[0].dur == 1.0
 ```
 
-- [ ] **Step 2: Run the tests to verify the first one fails**
+- [x] **Step 2: Run the tests to verify the first one fails**
 
 Run: `.venv/bin/pytest tests/test_arrange.py -k "sustained_inner or every_channel_is_busy" -v`
 Expected: `test_a_sustained_inner_voice_is_not_cut_short_for_a_nearby_note`
 FAILS (the held 67 is truncated to 0.5); `test_when_every_channel_is_busy_the_nearest_one_is_stolen`
 already PASSES and must keep passing.
 
-- [ ] **Step 3: Prefer free channels**
+- [x] **Step 3: Prefer free channels**
 
 In `src/bitty/arrange.py`, change the call site inside `_assign`:
 
@@ -760,12 +760,12 @@ def _pick_middle(tracks: Tracks, onset: float, note: Note, used: set[str]) -> st
     )
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `.venv/bin/pytest tests/test_arrange.py -v`
 Expected: PASS, 17 tests
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/bitty/arrange.py tests/test_arrange.py
@@ -790,7 +790,7 @@ into something idiomatic instead of something broken — and nothing is dropped.
   — now returns leftovers alongside the tracks. New helpers `_arpeggiate`,
   `_arp_cycle`, `_clip_overlaps`, and the constant `ARP_STEP_SEC = 0.016`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/test_arrange.py`:
 
@@ -882,12 +882,12 @@ def test_the_arpeggio_never_overlaps_the_channel_s_own_notes():
         assert earlier.t + earlier.dur <= later.t + 1e-6
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `.venv/bin/pytest tests/test_arrange.py -k "arpeggiate or dropped or sparse or overlaps" -v`
 Expected: FAIL — the sixth note is dropped, so `inner_b` holds one long note.
 
-- [ ] **Step 3: Fold the leftovers into a cycling line**
+- [x] **Step 3: Fold the leftovers into a cycling line**
 
 In `src/bitty/arrange.py`, add the constant next to `GRACE_SEC`:
 
@@ -1036,17 +1036,17 @@ def _clip_overlaps(takes: list[_Take]) -> list[_Take]:
     return [take for take in takes if take.dur > EPSILON]
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `.venv/bin/pytest tests/test_arrange.py -v`
 Expected: PASS, 24 tests
 
-- [ ] **Step 5: Run the whole suite**
+- [x] **Step 5: Run the whole suite**
 
 Run: `.venv/bin/pytest`
 Expected: PASS
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/bitty/arrange.py tests/test_arrange.py
@@ -1073,7 +1073,7 @@ and ragtime stresses overflow harder, so it takes that slot.
 - Consumes: `arrange` and `ingest`, unchanged.
 - Produces: no new source API. `BITTY_UPDATE_GOLDENS=1` regenerates the goldens.
 
-- [ ] **Step 1: Export the fixtures**
+- [x] **Step 1: Export the fixtures**
 
 ```bash
 mkdir -p tests/goldens
@@ -1093,7 +1093,7 @@ ls -l tests/fixtures/*.mxl
 
 Expected: three files, roughly 2.3 KB, 3.2 KB, and 5.6 KB.
 
-- [ ] **Step 2: Write the failing tests**
+- [x] **Step 2: Write the failing tests**
 
 Create `tests/test_goldens.py`:
 
@@ -1179,7 +1179,7 @@ def test_dense_writing_arpeggiates_and_sparse_writing_does_not():
     assert not [e for e in chorale["inner_b"] if abs(e.dur - 0.016) < 1e-9]
 ```
 
-- [ ] **Step 3: Run the tests to verify they fail**
+- [x] **Step 3: Run the tests to verify they fail**
 
 Run: `.venv/bin/pytest tests/test_goldens.py -v`
 Expected: the three `test_arrangement_matches_its_golden` cases FAIL with
@@ -1188,7 +1188,7 @@ already PASS — if `test_every_source_note_is_heard` fails, stop and investigat
 rather than loosening the assertion: a silently dropped note is the exact defect
 Task 4 exists to prevent.
 
-- [ ] **Step 4: Generate the goldens and read them**
+- [x] **Step 4: Generate the goldens and read them**
 
 ```bash
 BITTY_UPDATE_GOLDENS=1 .venv/bin/pytest tests/test_goldens.py -q
@@ -1207,12 +1207,12 @@ minuet `{lead: 44, counter: 31, inner_a: 1, inner_b: 35, bass: 45}`, ragtime
 near-empty `inner_a` is expected, not a bug: the source has four parts, so the
 arranger only needs two middle channels and the third picks up a single stray.
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run: `.venv/bin/pytest tests/test_goldens.py -v`
 Expected: PASS, 13 tests
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add tests/fixtures/*.mxl tests/goldens tests/test_goldens.py
@@ -1236,7 +1236,7 @@ re-analysis.
 - Produces: the `render` CLI command; internal `_write_audio(arrangement, out_dir, stem, wav) -> Path`
   and `_stem(path) -> str`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/test_cli.py`:
 
@@ -1286,12 +1286,12 @@ def test_render_rejects_a_missing_arrangement(tmp_path):
     assert result.exit_code != 0
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `.venv/bin/pytest tests/test_cli.py -k render -v`
 Expected: FAIL — `render` is not a command, so the exit code is 2.
 
-- [ ] **Step 3: Add the command**
+- [x] **Step 3: Add the command**
 
 Replace the whole of `src/bitty/cli.py`:
 
@@ -1370,17 +1370,17 @@ def _stem(path: Path) -> str:
     return path.stem
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `.venv/bin/pytest tests/test_cli.py -v`
 Expected: PASS, 10 tests
 
-- [ ] **Step 5: Run the whole suite**
+- [x] **Step 5: Run the whole suite**
 
 Run: `.venv/bin/pytest`
 Expected: PASS
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/bitty/cli.py tests/test_cli.py
@@ -1398,7 +1398,7 @@ and whether the arpeggio reads as harmony rather than as a broken melody.
 **Files:**
 - Modify: `docs/superpowers/plans/2026-08-20-phase-3a-arranger.md` (outcome section)
 
-- [ ] **Step 1: Render all three fixtures**
+- [x] **Step 1: Render all three fixtures**
 
 Audition renders must be WAV: `aplay` cannot decode Ogg and plays it as static.
 
@@ -1408,7 +1408,7 @@ Audition renders must be WAV: `aplay` cannot decode Ogg and plays it as static.
 .venv/bin/bitty convert tests/fixtures/ragtime.mxl -o out/ --wav
 ```
 
-- [ ] **Step 2: Listen against Phase 2**
+- [x] **Step 2: Listen against Phase 2**
 
 ```bash
 aplay out/chorale.wav
@@ -1426,7 +1426,7 @@ The bar to clear:
   the knob — that is Phase 5's preset material, and the number to record here.
 - Nothing is obviously missing versus the score.
 
-- [ ] **Step 3: Record the outcome**
+- [x] **Step 3: Record the outcome**
 
 Append an "Outcome of the acceptance listen" section to this plan, in the shape
 of Phase 2's: what was heard, what was decided, and which knob to expose in
@@ -1437,7 +1437,7 @@ git add docs/superpowers/plans/2026-08-20-phase-3a-arranger.md
 git commit -m "docs: record the Phase 3a acceptance listen"
 ```
 
-- [ ] **Step 4: Finish the branch**
+- [x] **Step 4: Finish the branch**
 
 Use the superpowers:finishing-a-development-branch skill. Phase 1 and Phase 2
 each landed on `main` as a `--no-ff` merge; follow that.
@@ -1463,3 +1463,56 @@ Phase 3b adds articulation against this contract: delayed vibrato on sustained
 notes, ornament shaping, and the dynamics work that goes with them. It adds
 fields to `Instrument` or `Event` and teaches `synth.py` to read them; it does
 not change who plays what.
+
+## Outcome of the acceptance listen (2026-08-21)
+
+Heard on all three fixtures. **Five voices assigned by voice leading beat the
+Phase 1 top-and-bottom reduction, and the arpeggio reads as harmony.** Accepted
+with no reservations raised, so nothing here is left open.
+
+Two defects surfaced between the last commit and the listen, both of which had
+to be fixed before the renders cleared the bar. Both were the same mistake —
+judging a pin against too little of the texture — and both are worth recording,
+because the shapes recur:
+
+- **A resting hand is not a new texture.** Ragtime's left hand restrikes on the
+  offbeat while the melody rests, and every note ends exactly where the next
+  begins, so nothing rings and no rest separates the groups. An empty pin
+  reference was read as *no information* and the fragment was pinned by its own
+  extremes, crowning the stride bass as the tune — 15 octave-plus leaps on the
+  lead in 20 seconds. `_texture` now has every channel contribute what it is
+  holding, or once silent what it last sang; the pinned channel is the exception
+  and counts only while it rings. That one rule replaced the `after_rest` gap
+  check and the lone-note special case, which were this bug in miniature.
+- **A spent ornament is not a line.** A grace note is written above the note it
+  decorates, so the inner channel that catches one is left holding a pitch above
+  its own line — and kept voting with it. In the minuet a spent `83` at t=4.0
+  cost the melody's `79` the lead, and the channel it landed on went on blocking
+  the lead for another second and a half. `_Take` now knows whether it is an
+  ornament and `_last_pitch` skips them.
+
+Measured on the fixtures as the share of the lead channel playing the source's
+top part — the objective form of "the melody stays put":
+
+| fixture | lead before | lead after | bass before | bass after |
+|---------|-------------|------------|-------------|------------|
+| chorale | 96.8% | 96.7% | 100% | 100% |
+| minuet | 93.2% | **97.4%** | 77.8% | **85.7%** |
+| ragtime | 82.5% | **96.6%** | 98.1% | 98.1% |
+
+Octave-plus leaps on the ragtime lead went 15 → 0. The one that remains on the
+minuet lead (t=12.0, 67 → 83) is in the score. Inner voices still swap parts
+freely, which is expected: they share a register, and proximity is the only
+thing choosing between them.
+
+Knobs for Phase 5, neither of them forced by this listen:
+
+- `ARP_STEP_SEC` (16 ms, the spec's `[arp] rate_ms`) was not auditioned against
+  alternatives. The ragtime spends 135 of inner_b's 178 events on arpeggio
+  steps, so this is the number to expose first if density ever grates.
+- The voice count and the roster in `voices.py` — already data, already the
+  table Phase 5 overrides.
+
+Phase 3b picks up articulation against this contract. Note that ornaments now
+carry a flag through the arranger (`_Take.ornament`); shaping them is exactly
+the work 3b exists for, and the flag is where it starts.
