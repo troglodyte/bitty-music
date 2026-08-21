@@ -65,11 +65,13 @@ def test_silent_channels_are_left_out():
 
 def test_grace_notes_survive_as_short_notes():
     """music21 gives grace notes zero quarter-length. A chip channel cannot
-    play zero seconds, so they get a floor instead of disappearing."""
+    play zero seconds, so they get a floor instead of disappearing. Which
+    channel catches the ornament is not the point here — that it still sounds,
+    and sounds briefly, is."""
     arrangement = arrange(score_of(note(72, 0.0, dur=1.0), note(79, 0.0, dur=0.0)))
-    lead = channels(arrangement)["lead"].events
-    assert lead[0].pitch == 79
-    assert lead[0].dur == 0.032
+    grace = [e for c in arrangement.channels for e in c.events if e.pitch == 79]
+    assert len(grace) == 1
+    assert grace[0].dur == 0.032
 
 
 def test_a_moving_inner_note_does_not_steal_the_bass():
@@ -226,6 +228,36 @@ def test_nothing_is_dropped_when_the_channels_run_out():
     )
     heard = {e.pitch for c in arrangement.channels for e in c.events}
     assert {72, 69, 67, 64, 62, 60, 48} <= heard
+
+
+def test_a_grace_note_does_not_take_the_lead_from_the_note_it_ornaments():
+    """music21 writes a grace note above the note it decorates and gives it zero
+    length. Letting it contest the pin hands the lead a 32ms blip and exiles the
+    melody to an inner channel — the exact teleport this phase exists to stop."""
+    arrangement = arrange(
+        score_of(note(86, 0.0, dur=0.5), note(88, 0.0, dur=0.0), note(60, 0.0, dur=0.5))
+    )
+    assert pitches(arrangement, "lead") == [86]
+    assert 88 in {e.pitch for c in arrangement.channels for e in c.events}
+
+
+def test_a_chord_re_entering_after_a_rest_still_reaches_lead_and_bass():
+    """A lone note after a rest needs its voice inferred; a chord does not. Its
+    own top and bottom define the texture, and measuring it against the previous
+    phrase leaves both edge channels silent."""
+    arrangement = arrange(
+        score_of(
+            note(72, 0.0, dur=1.0),
+            note(60, 0.0, dur=1.0),
+            note(48, 0.0, dur=1.0),
+            note(67, 3.0, dur=1.0),
+            note(62, 3.0, dur=1.0),
+            note(59, 3.0, dur=1.0),
+            note(50, 3.0, dur=1.0),
+        )
+    )
+    assert pitches(arrangement, "lead") == [72, 67]
+    assert pitches(arrangement, "bass") == [48, 50]
 
 
 def test_a_short_dense_chord_still_sounds_every_pitch():

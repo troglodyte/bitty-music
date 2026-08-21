@@ -80,8 +80,16 @@ def _assign(score: Score) -> tuple[Tracks, list[tuple[float, list[Note]]]]:
     tracks: Tracks = {voice.role: [] for voice in ROSTER}
     leftovers: list[tuple[float, list[Note]]] = []
 
-    for onset, pending in _by_onset(score.notes):
+    for onset, group in _by_onset(score.notes):
         used: set[str] = set()
+        # A grace note is written above the note it ornaments, so leaving it in
+        # the running would hand it the lead pin and push the actual melody onto
+        # an inner channel. Pin against the notes that have real duration; the
+        # ornaments take what is left, and Phase 3b gives them their proper shape.
+        pending = [note for note in group if note.dur > EPSILON]
+        graces = [note for note in group if note.dur <= EPSILON] if pending else []
+        if not pending:
+            pending = list(group)
         sounding = [
             pitch
             for pitch in (_sounding(tracks[voice.role], onset) for voice in ROSTER)
@@ -102,13 +110,17 @@ def _assign(score: Score) -> tuple[Tracks, list[tuple[float, list[Note]]]]:
             default=None,
         )
         after_rest = last_end is not None and last_end < onset - EPSILON
+        # Only a lone note needs its voice inferred. A chord re-entering after a
+        # rest defines its own texture: its top is the top and its bottom is the
+        # bottom, and measuring it against the previous phrase leaves both edge
+        # channels silent.
         reference = sounding or (
             [
                 pitch
                 for pitch in (_last_pitch(tracks[voice.role]) for voice in ROSTER)
                 if pitch is not None
             ]
-            if after_rest
+            if after_rest and len(pending) == 1
             else []
         )
 
@@ -121,7 +133,7 @@ def _assign(score: Score) -> tuple[Tracks, list[tuple[float, list[Note]]]]:
             used.add(BASS_ROLE)
 
         spare: list[Note] = []
-        for note in pending:
+        for note in pending + graces:
             role = _pick_middle(tracks, onset, note, used)
             if role is None:
                 spare.append(note)

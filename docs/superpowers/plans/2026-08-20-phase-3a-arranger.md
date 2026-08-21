@@ -32,7 +32,9 @@ soundfile, typer, pytest. No new dependencies.
 - Voice budget is five sounding channels plus an echo. Arp rate is 16 ms per
   step (the spec's `[arp] rate_ms = 16`). The spec's `[arp] threshold = 5` is
   not a separate check: overflow triggers when the channels run out, which at a
-  five-voice roster *is* the threshold. Phase 5 makes both numbers config.
+  five-voice roster *is* the threshold. Phase 5 makes both numbers config. Note
+  the small drift this implies: with five simultaneous notes, overflow can fire
+  when a pin does not, where the spec's wording says "more than five".
 - Dynamics quantize to 16 levels. The coarse steps are the texture, not a loss.
 - Source layout is `src/bitty/`, tests in `tests/`.
 - `synth.py`, `osc.py`, `envelope.py`, and `filters.py` are **not modified by
@@ -362,6 +364,47 @@ def test_grace_notes_survive_as_short_notes():
     assert lead[0].dur == 0.032
 
 
+def test_a_moving_inner_note_does_not_steal_the_bass():
+    """The mirror of the lead case: the bottom of the texture is pinned too."""
+    arrangement = arrange(
+        score_of(note(72, 0.0, dur=2.0), note(48, 0.0, dur=2.0), note(60, 1.0, dur=1.0))
+    )
+    assert pitches(arrangement, "bass") == [48]
+
+
+def test_notes_that_abut_are_not_treated_as_a_rest():
+    """Homophonic writing ends every note exactly where the next begins. If that
+    counted as silence, pinning would fall back to last pitches, a descending
+    soprano would stop reaching the lead, and a chorale would arpeggiate."""
+    arrangement = arrange(
+        score_of(
+            note(72, 0.0, dur=1.0),
+            note(60, 0.0, dur=1.0),
+            note(48, 0.0, dur=1.0),
+            note(71, 1.0, dur=1.0),
+            note(59, 1.0, dur=1.0),
+            note(47, 1.0, dur=1.0),
+        )
+    )
+    assert pitches(arrangement, "lead") == [72, 71]
+    assert pitches(arrangement, "bass") == [48, 47]
+
+
+def test_a_low_note_re_entering_after_a_rest_goes_to_the_bass():
+    """With nothing ringing, pinning falls back to what each channel last played.
+    Otherwise the melody channel picks up the bass line after every rest, and the
+    50%-duty lead pulse ends up playing notes two octaves below the tune."""
+    arrangement = arrange(
+        score_of(
+            note(72, 0.0, dur=1.0),
+            note(40, 0.0, dur=1.0),
+            note(38, 2.0, dur=1.0),  # the bass returns alone after a beat of silence
+        )
+    )
+    assert pitches(arrangement, "bass") == [40, 38]
+    assert pitches(arrangement, "lead") == [72]
+
+
 def test_velocity_is_quantized_to_sixteen_levels():
     arrangement = arrange(ingest(FIXTURE))
     for channel in arrangement.channels:
@@ -498,19 +541,41 @@ def _assign(score: Score) -> Tracks:
 
     for onset, pending in _by_onset(score.notes):
         used: set[str] = set()
-        held = [
+        sounding = [
             pitch
             for pitch in (_sounding(tracks[voice.role], onset) for voice in ROSTER)
             if pitch is not None
         ]
+        # Pinning is judged against the whole sounding texture, not just this
+        # onset: a lone moving inner note must not displace a lead that is still
+        # ringing.
+        #
+        # After a real rest nothing rings, and then the comparison falls back to
+        # what each channel last played, so a note re-entering alone joins the
+        # voice it continues instead of defaulting to the lead. The rest has to
+        # be real: homophonic writing ends every note exactly where the next
+        # begins, and treating that as silence would stop a descending soprano
+        # from ever reaching the lead.
+        last_end = max(
+            (takes[-1].t + takes[-1].dur for takes in tracks.values() if takes),
+            default=None,
+        )
+        after_rest = last_end is not None and last_end < onset - EPSILON
+        reference = sounding or (
+            [
+                pitch
+                for pitch in (_last_pitch(tracks[voice.role]) for voice in ROSTER)
+                if pitch is not None
+            ]
+            if after_rest
+            else []
+        )
 
-        # Pinning is against the whole sounding texture, not just this onset:
-        # a lone moving inner note must not displace a lead that is still ringing.
-        if not held or pending[0].pitch >= max(held):
+        if not reference or pending[0].pitch >= max(reference):
             _place(tracks[LEAD_ROLE], pending.pop(0))
             used.add(LEAD_ROLE)
 
-        if pending and (not held or pending[-1].pitch <= min(held)):
+        if pending and (not reference or pending[-1].pitch <= min(reference)):
             _place(tracks[BASS_ROLE], pending.pop())
             used.add(BASS_ROLE)
 
@@ -583,7 +648,7 @@ def _quantize_velocity(velocity: int) -> int:
 - [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `.venv/bin/pytest tests/test_arrange.py -v`
-Expected: PASS, 12 tests
+Expected: PASS, 15 tests
 
 - [ ] **Step 5: Run the whole suite**
 
@@ -698,7 +763,7 @@ def _pick_middle(tracks: Tracks, onset: float, note: Note, used: set[str]) -> st
 - [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `.venv/bin/pytest tests/test_arrange.py -v`
-Expected: PASS, 14 tests
+Expected: PASS, 17 tests
 
 - [ ] **Step 5: Commit**
 
@@ -758,6 +823,46 @@ def test_nothing_is_dropped_when_the_channels_run_out():
     assert {72, 69, 67, 64, 62, 60, 48} <= heard
 
 
+def test_a_grace_note_does_not_take_the_lead_from_the_note_it_ornaments():
+    """music21 writes a grace note above the note it decorates and gives it zero
+    length. Letting it contest the pin hands the lead a 32ms blip and exiles the
+    melody to an inner channel — the exact teleport this phase exists to stop."""
+    arrangement = arrange(
+        score_of(note(86, 0.0, dur=0.5), note(88, 0.0, dur=0.0), note(60, 0.0, dur=0.5))
+    )
+    assert pitches(arrangement, "lead") == [86]
+    assert 88 in {e.pitch for c in arrangement.channels for e in c.events}
+
+
+def test_a_chord_re_entering_after_a_rest_still_reaches_lead_and_bass():
+    """A lone note after a rest needs its voice inferred; a chord does not. Its
+    own top and bottom define the texture, and measuring it against the previous
+    phrase leaves both edge channels silent."""
+    arrangement = arrange(
+        score_of(
+            note(72, 0.0, dur=1.0),
+            note(60, 0.0, dur=1.0),
+            note(48, 0.0, dur=1.0),
+            note(67, 3.0, dur=1.0),
+            note(62, 3.0, dur=1.0),
+            note(59, 3.0, dur=1.0),
+            note(50, 3.0, dur=1.0),
+        )
+    )
+    assert pitches(arrangement, "lead") == [72, 67]
+    assert pitches(arrangement, "bass") == [48, 50]
+
+
+def test_a_short_dense_chord_still_sounds_every_pitch():
+    """A cycle shorter than its pitch set is where voices quietly went missing:
+    seven notes lasting 32ms each left room for two arpeggio steps."""
+    arrangement = arrange(
+        score_of(*[note(p, 0.0, dur=0.032) for p in (72, 69, 67, 64, 62, 60, 48)])
+    )
+    heard = {e.pitch for c in arrangement.channels for e in c.events}
+    assert {72, 69, 67, 64, 62, 60, 48} <= heard
+
+
 def test_sparse_writing_produces_no_arpeggio():
     arrangement = arrange(
         score_of(note(72, 0.0, dur=1.0), note(64, 0.0, dur=1.0), note(48, 0.0, dur=1.0))
@@ -807,24 +912,60 @@ def _assign(score: Score) -> tuple[Tracks, list[tuple[float, list[Note]]]]:
     tracks: Tracks = {voice.role: [] for voice in ROSTER}
     leftovers: list[tuple[float, list[Note]]] = []
 
-    for onset, pending in _by_onset(score.notes):
+    for onset, group in _by_onset(score.notes):
         used: set[str] = set()
-        held = [
+        # A grace note is written above the note it ornaments, so leaving it in
+        # the running would hand it the lead pin and push the actual melody onto
+        # an inner channel. Pin against the notes that have real duration; the
+        # ornaments take what is left, and Phase 3b gives them their proper shape.
+        pending = [note for note in group if note.dur > EPSILON]
+        graces = [note for note in group if note.dur <= EPSILON] if pending else []
+        if not pending:
+            pending = list(group)
+        sounding = [
             pitch
             for pitch in (_sounding(tracks[voice.role], onset) for voice in ROSTER)
             if pitch is not None
         ]
+        # Pinning is judged against the whole sounding texture, not just this
+        # onset: a lone moving inner note must not displace a lead that is still
+        # ringing.
+        #
+        # After a real rest nothing rings, and then the comparison falls back to
+        # what each channel last played, so a note re-entering alone joins the
+        # voice it continues instead of defaulting to the lead. The rest has to
+        # be real: homophonic writing ends every note exactly where the next
+        # begins, and treating that as silence would stop a descending soprano
+        # from ever reaching the lead.
+        last_end = max(
+            (takes[-1].t + takes[-1].dur for takes in tracks.values() if takes),
+            default=None,
+        )
+        after_rest = last_end is not None and last_end < onset - EPSILON
+        # Only a lone note needs its voice inferred. A chord re-entering after a
+        # rest defines its own texture: its top is the top and its bottom is the
+        # bottom, and measuring it against the previous phrase leaves both edge
+        # channels silent.
+        reference = sounding or (
+            [
+                pitch
+                for pitch in (_last_pitch(tracks[voice.role]) for voice in ROSTER)
+                if pitch is not None
+            ]
+            if after_rest and len(pending) == 1
+            else []
+        )
 
-        if not held or pending[0].pitch >= max(held):
+        if not reference or pending[0].pitch >= max(reference):
             _place(tracks[LEAD_ROLE], pending.pop(0))
             used.add(LEAD_ROLE)
 
-        if pending and (not held or pending[-1].pitch <= min(held)):
+        if pending and (not reference or pending[-1].pitch <= min(reference)):
             _place(tracks[BASS_ROLE], pending.pop())
             used.add(BASS_ROLE)
 
         spare: list[Note] = []
-        for note in pending:
+        for note in pending + graces:
             role = _pick_middle(tracks, onset, note, used)
             if role is None:
                 spare.append(note)
@@ -853,9 +994,11 @@ def _arpeggiate(
     out = list(takes)
 
     for onset, notes in leftovers:
+        # Partition rather than remove-by-value: `_Take` is a mutable dataclass
+        # with structural equality, so `list.remove` would match any take that
+        # merely looks the same.
         absorbed = [take for take in out if abs(take.t - onset) <= EPSILON]
-        for take in absorbed:
-            out.remove(take)
+        out = [take for take in out if abs(take.t - onset) > EPSILON]
 
         pitches = sorted({n.pitch for n in notes} | {take.pitch for take in absorbed})
         # The cycle lasts only as long as its shortest member: a note that has
@@ -870,7 +1013,10 @@ def _arpeggiate(
 
 
 def _arp_cycle(onset: float, span: float, pitches: list[int], vel: int) -> list[_Take]:
-    steps = max(1, int(span / ARP_STEP_SEC))
+    # At least one step per pitch. A short dense chord — an ornament, or a
+    # staccato stab — must still sound every note it was handed, even if the
+    # cycle then runs slightly past where the chord ended.
+    steps = max(len(pitches), int(span / ARP_STEP_SEC))
     return [
         _Take(
             t=onset + step * ARP_STEP_SEC,
@@ -893,7 +1039,7 @@ def _clip_overlaps(takes: list[_Take]) -> list[_Take]:
 - [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `.venv/bin/pytest tests/test_arrange.py -v`
-Expected: PASS, 18 tests
+Expected: PASS, 24 tests
 
 - [ ] **Step 5: Run the whole suite**
 
@@ -957,7 +1103,7 @@ from pathlib import Path
 
 import pytest
 
-from bitty.arrange import arrange
+from bitty.arrange import ARP_STEP_SEC, arrange
 from bitty.ingest import ingest
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -993,13 +1139,25 @@ def test_no_channel_plays_two_notes_at_once(name):
 
 @pytest.mark.parametrize("name", NAMES)
 def test_every_source_note_is_heard(name):
-    """Nothing vanishes: overflow arpeggiates, and grace notes get a floor."""
+    """Nothing vanishes: overflow arpeggiates, and grace notes get a floor.
+
+    A note counts as heard only if some event starts at its own onset, or if an
+    arpeggio step of its pitch falls inside its span. Merely finding the same
+    pitch somewhere in the window would let a dropped note be excused by an
+    unrelated voice that happens to be playing it.
+    """
     score = ingest(FIXTURES / f"{name}.mxl")
     events = [e for c in arranged(name).channels for e in c.events]
     for note in score.notes:
         assert any(
             e.pitch == note.pitch
-            and note.start - EPSILON <= e.t <= note.start + note.dur + EPSILON
+            and (
+                abs(e.t - note.start) <= EPSILON
+                or (
+                    abs(e.dur - ARP_STEP_SEC) < 1e-9
+                    and note.start - EPSILON <= e.t <= note.start + note.dur + EPSILON
+                )
+            )
             for e in events
         ), f"{note} never sounds"
 
