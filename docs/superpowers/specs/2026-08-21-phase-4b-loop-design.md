@@ -135,9 +135,13 @@ overruling the person who typed the number.
 
 ### Tier 1 — repeat marks
 
-Each start-repeat / end-repeat pair in `Score.bars` becomes a span. An end
-repeat with no preceding start repeats from bar one, which is both
-music21's convention and the notational one.
+Each start-repeat / end-repeat pair in `Score.bars` becomes a span. An
+unpaired mark closes at the nearest edge, in both directions: an end
+repeat with no preceding start repeats from bar one, and a start repeat
+with no following end repeats to the last bar. Both are the notational
+reading — the minuet fixture is exactly the second case, `|:` at bar 9
+under a final barline at bar 16 with no `:|` written, which every player
+reads as repeating to the end.
 
 Ordered longest first: a loop wants the substantial repeated body, not an
 incidental four-bar echo. Ties break earlier-first.

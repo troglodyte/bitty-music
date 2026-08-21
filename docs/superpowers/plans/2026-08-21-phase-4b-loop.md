@@ -33,7 +33,8 @@ Measured against the fixtures on 2026-08-21, before the plan was written. Do not
 | Fixture durations | chorale 16.0 s (audio 16.38 s), minuet 24.0 s (audio 24.38 s), ragtime 19.2 s (audio 19.35 s) |
 | Rendered audio exceeds score end | by the echo delay: 0.38 s (chorale, minuet), 0.15 s (ragtime) |
 | Sections | chorale `[(1,8)]`, minuet `[(1,8),(9,16)]`, ragtime `[(1,16)]` |
-| Repeat spans | minuet `(1,8)` and `(9,16)`; ragtime `(1,16)`; chorale none |
+| Repeat marks | minuet: end at bar 8, **unpaired start at bar 9**; ragtime: start at 1, end at 16; chorale none |
+| Repeat spans | minuet `(1,8)` and `(9,16)` — the second only because an unpaired start repeat closes at the last bar; ragtime `(1,16)`; chorale none |
 | `ordinary` (99.9th pct adjacent-sample step) | chorale 0.266, minuet 0.420, ragtime 0.455 |
 | Seam ratio, bar-aligned candidates | 0.02 – 0.38 across all fixtures and tiers |
 | Seam ratio, 400 random splices/fixture | median 0.54–0.80, p90 1.07–1.67, max 2.97; 15–40% exceed 1.0 |
