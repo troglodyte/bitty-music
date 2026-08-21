@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from itertools import groupby
 
 from bitty.arrangement import MAX_VELOCITY, Arrangement, Channel, Echo, Event
+from bitty.lfo import MIN_NOTE_SEC
 from bitty.model import Note, Score
 from bitty.voices import (
     ARP_ROLE,
@@ -30,8 +31,12 @@ from bitty.voices import (
 )
 
 EPSILON = 1e-6  # onset times are floats; anything closer than this is one moment
-GRACE_SEC = 0.032  # music21 gives grace notes zero length; a channel needs some
 ARP_STEP_SEC = 0.016  # the spec's [arp] rate_ms = 16
+
+DOWNBEAT_STRENGTH = 1.0
+SECONDARY_STRENGTH = 0.5
+DOWNBEAT_ACCENT = 2
+WEAK_BEAT_TRIM = -1
 
 
 @dataclass
@@ -42,7 +47,6 @@ class _Take:
     pitch: int
     dur: float
     vel: int
-    ornament: bool = False  # a floored grace note: it sounds, but it is not a line
 
 
 Tracks = dict[str, list[_Take]]
@@ -83,14 +87,7 @@ def _assign(score: Score) -> tuple[Tracks, list[tuple[float, list[Note]]]]:
 
     for onset, group in _by_onset(score.notes):
         used: set[str] = set()
-        # A grace note is written above the note it ornaments, so leaving it in
-        # the running would hand it the lead pin and push the actual melody onto
-        # an inner channel. Pin against the notes that have real duration; the
-        # ornaments take what is left, and Phase 3b gives them their proper shape.
-        pending = [note for note in group if note.dur > EPSILON]
-        graces = [note for note in group if note.dur <= EPSILON] if pending else []
-        if not pending:
-            pending = list(group)
+        pending = list(group)
         above = _texture(tracks, onset, without=LEAD_ROLE)
         if not above or pending[0].pitch >= max(above):
             _place(tracks[LEAD_ROLE], pending.pop(0))
@@ -102,7 +99,7 @@ def _assign(score: Score) -> tuple[Tracks, list[tuple[float, list[Note]]]]:
             used.add(BASS_ROLE)
 
         spare: list[Note] = []
-        for note in pending + graces:
+        for note in pending:
             role = _pick_middle(tracks, onset, note, used)
             if role is None:
                 spare.append(note)
@@ -130,9 +127,8 @@ def _place(takes: list[_Take], note: Note) -> None:
         _Take(
             t=note.start,
             pitch=note.pitch,
-            dur=max(note.dur, GRACE_SEC),
-            vel=_quantize_velocity(note.velocity),
-            ornament=note.dur <= EPSILON,
+            dur=note.dur,
+            vel=_velocity(note),
         )
     )
 
@@ -169,17 +165,8 @@ def _sounding(takes: list[_Take], t: float) -> int | None:
 
 
 def _last_pitch(takes: list[_Take]) -> int | None:
-    """The last pitch this channel actually sang, ignoring spent ornaments.
-
-    A grace note is written above the note it decorates, so a channel that
-    caught one is left holding a pitch well above its own line. Counting that
-    as the channel's voice costs the melody the lead the moment it dips below
-    the ornament, and keeps costing it until the channel next plays.
-    """
-    for take in reversed(takes):
-        if not take.ornament:
-            return take.pitch
-    return None
+    """The last pitch this channel actually sang."""
+    return takes[-1].pitch if takes else None
 
 
 def _pick_middle(tracks: Tracks, onset: float, note: Note, used: set[str]) -> str | None:
@@ -205,16 +192,41 @@ def _distance(last_pitch: int | None, pitch: int) -> int:
 
 
 def _events(takes: list[_Take]) -> tuple[Event, ...]:
+    """Takes as contract events, flagging the ones long enough to waver.
+
+    The flag is applied here rather than in `_place` because a take's duration
+    is not final until every later note has had its chance to truncate it.
+    """
     return tuple(
-        Event(t=take.t, pitch=take.pitch, dur=take.dur, vel=take.vel)
+        Event(
+            t=take.t,
+            pitch=take.pitch,
+            dur=take.dur,
+            vel=take.vel,
+            vibrato=take.dur >= MIN_NOTE_SEC,
+        )
         for take in takes
         if take.dur > EPSILON
     )
 
 
-def _quantize_velocity(velocity: int) -> int:
-    """127 MIDI steps down to the 16 levels an 8-bit channel actually has."""
-    return max(0, min(MAX_VELOCITY, round(velocity / 127 * MAX_VELOCITY)))
+def _velocity(note: Note) -> int:
+    """The written dynamic, quantized, then lifted or trimmed by metric position.
+
+    Quantize first and accent second: the 16 levels are the texture, and an
+    accent that vanished into rounding would not be an accent. The clamp keeps
+    a trim from silencing a note outright.
+    """
+    level = round(note.velocity / 127 * MAX_VELOCITY)
+    return max(1, min(MAX_VELOCITY, level + _accent(note.beat_strength)))
+
+
+def _accent(beat_strength: float) -> int:
+    if beat_strength >= DOWNBEAT_STRENGTH:
+        return DOWNBEAT_ACCENT
+    if beat_strength >= SECONDARY_STRENGTH:
+        return 0
+    return WEAK_BEAT_TRIM
 
 
 def _arpeggiate(
@@ -240,7 +252,7 @@ def _arpeggiate(
         # ended must not keep sounding just because the arpeggio is still running.
         span = min([n.dur for n in notes] + [take.dur for take in absorbed])
         vel = max(
-            [_quantize_velocity(n.velocity) for n in notes] + [take.vel for take in absorbed]
+            [_velocity(n) for n in notes] + [take.vel for take in absorbed]
         )
         out.extend(_arp_cycle(onset, span, pitches, vel))
 

@@ -4,14 +4,16 @@ from bitty.arrangement import Arrangement, Channel, Echo, Event, Instrument
 from bitty.synth import SAMPLE_RATE, render
 
 
-def one_note(pitch=69, dur=1.0, wave="pulse", vel=15, **instrument_kwargs) -> Arrangement:
+def one_note(
+    pitch=69, dur=1.0, wave="pulse", vel=15, vibrato=False, **instrument_kwargs
+) -> Arrangement:
     return Arrangement(
         meta={"title": "test", "bpm": 120.0},
         channels=(
             Channel(
                 role="lead",
                 instrument=Instrument(wave=wave, **instrument_kwargs),
-                events=(Event(t=0.0, pitch=pitch, dur=dur, vel=vel),),
+                events=(Event(t=0.0, pitch=pitch, dur=dur, vel=vel, vibrato=vibrato),),
             ),
         ),
     )
@@ -163,3 +165,31 @@ def test_an_empty_arrangement_renders_silence_not_a_crash():
     audio = render(Arrangement(meta={}, channels=()))
     assert audio.shape[1] == 2
     assert np.max(np.abs(audio), initial=0.0) == 0.0
+
+
+def test_a_vibrato_event_wavers_and_a_plain_one_does_not():
+    """Vibrato is a pitch effect, so measure it as pitch: zero-crossing spacing.
+
+    A steady tone crosses zero at even intervals; a wavering one does not. The
+    tail is measured because the first 300 ms are silent by design.
+    """
+
+    def crossing_spread(vibrato):
+        audio = mono(render(one_note(dur=2.0, vibrato=vibrato)))
+        tail = audio[int(0.8 * SAMPLE_RATE) :]
+        rising = np.flatnonzero(np.diff(np.signbit(tail)))
+        # Interpolate to sub-sample resolution and measure whole periods. A
+        # crossing rounded to the nearest sample wobbles by half a sample on
+        # its own, which is the same order as a 25-cent vibrato; and a pulse
+        # wave's two half-periods differ by duty cycle, not by pitch.
+        fraction = tail[rising] / (tail[rising] - tail[rising + 1])
+        return np.std(np.diff((rising + fraction)[::2]))
+
+    assert crossing_spread(vibrato=True) > crossing_spread(vibrato=False) * 3
+
+
+def test_vibrato_changes_only_the_notes_that_ask_for_it():
+    assert not np.array_equal(
+        render(one_note(dur=2.0, vibrato=True)),
+        render(one_note(dur=2.0, vibrato=False)),
+    )

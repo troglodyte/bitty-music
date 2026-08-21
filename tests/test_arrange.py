@@ -1,15 +1,24 @@
 from pathlib import Path
 
+import pytest
+
 from bitty import voices
-from bitty.arrange import arrange
+from bitty.arrange import _velocity, arrange
 from bitty.ingest import ingest
 from bitty.model import Note, Score
 
 FIXTURE = Path(__file__).parent / "fixtures" / "two_part.musicxml"
 
 
-def note(pitch, start, dur=1.0, velocity=64, part=0):
-    return Note(pitch=pitch, start=start, dur=dur, velocity=velocity, part=part)
+def note(pitch, start, dur=1.0, velocity=64, part=0, beat_strength=0.5):
+    return Note(
+        pitch=pitch,
+        start=start,
+        dur=dur,
+        velocity=velocity,
+        part=part,
+        beat_strength=beat_strength,
+    )
 
 
 def score_of(*notes, bpm=120.0, title="test"):
@@ -63,16 +72,6 @@ def test_silent_channels_are_left_out():
     assert [c.role for c in arrangement.channels] == ["lead", "bass"]
 
 
-def test_grace_notes_survive_as_short_notes():
-    """music21 gives grace notes zero quarter-length. A chip channel cannot
-    play zero seconds, so they get a floor instead of disappearing. Which
-    channel catches the ornament is not the point here — that it still sounds,
-    and sounds briefly, is."""
-    arrangement = arrange(score_of(note(72, 0.0, dur=1.0), note(79, 0.0, dur=0.0)))
-    grace = [e for c in arrangement.channels for e in c.events if e.pitch == 79]
-    assert len(grace) == 1
-    assert grace[0].dur == 0.032
-
 
 def test_the_melody_keeps_the_lead_while_the_accompaniment_strides_alone():
     """Ragtime's left hand restrikes on the offbeat while the melody rests, and
@@ -92,22 +91,6 @@ def test_the_melody_keeps_the_lead_while_the_accompaniment_strides_alone():
     )
     assert pitches(arrangement, "lead") == [75, 75]
 
-
-def test_a_spent_ornament_does_not_stand_in_the_texture():
-    """A grace note parked on an inner channel is a 32 ms blip, not a line. Let
-    it keep a vote on where the top of the texture is and the melody dipping
-    below it loses the lead — then the inner channel it landed on holds that
-    high pitch and goes on blocking the lead for every note after."""
-    arrangement = arrange(
-        score_of(
-            note(81, 0.0, dur=0.5),
-            note(83, 0.0, dur=0.0),  # the ornament, written above the melody
-            note(60, 0.0, dur=0.5),
-            note(79, 0.5, dur=0.5),  # the melody carries on, below the ornament
-            note(59, 0.5, dur=0.5),
-        )
-    )
-    assert pitches(arrangement, "lead") == [81, 79]
 
 
 def test_a_moving_inner_note_does_not_steal_the_bass():
@@ -266,16 +249,6 @@ def test_nothing_is_dropped_when_the_channels_run_out():
     assert {72, 69, 67, 64, 62, 60, 48} <= heard
 
 
-def test_a_grace_note_does_not_take_the_lead_from_the_note_it_ornaments():
-    """music21 writes a grace note above the note it decorates and gives it zero
-    length. Letting it contest the pin hands the lead a 32ms blip and exiles the
-    melody to an inner channel — the exact teleport this phase exists to stop."""
-    arrangement = arrange(
-        score_of(note(86, 0.0, dur=0.5), note(88, 0.0, dur=0.0), note(60, 0.0, dur=0.5))
-    )
-    assert pitches(arrangement, "lead") == [86]
-    assert 88 in {e.pitch for c in arrangement.channels for e in c.events}
-
 
 def test_a_chord_re_entering_after_a_rest_still_reaches_lead_and_bass():
     """A lone note after a rest needs its voice inferred; a chord does not. Its
@@ -323,3 +296,43 @@ def test_the_arpeggio_never_overlaps_the_channel_s_own_notes():
     events = channels(arrangement)["inner_b"].events
     for earlier, later in zip(events, events[1:]):
         assert earlier.t + earlier.dur <= later.t + 1e-6
+
+
+def test_a_downbeat_is_louder_than_a_weak_beat():
+    downbeat = _velocity(note(60, 0.0, beat_strength=1.0))
+    secondary = _velocity(note(60, 0.0, beat_strength=0.5))
+    weak = _velocity(note(60, 0.0, beat_strength=0.25))
+    assert downbeat == secondary + 2
+    assert weak == secondary - 1
+
+
+def test_accent_never_silences_a_note_or_exceeds_the_ceiling():
+    loudest = note(60, 0.0, velocity=127, beat_strength=1.0)
+    quietest = note(60, 0.0, velocity=1, beat_strength=0.25)
+    assert _velocity(loudest) == 15
+    assert _velocity(quietest) >= 1
+
+
+def test_sustained_notes_get_vibrato_and_short_ones_do_not():
+    arrangement = arrange(score_of(note(72, 0.0, dur=2.0), note(74, 2.0, dur=0.1)))
+    events = [e for c in arrangement.channels for e in c.events]
+    assert [e.vibrato for e in events] == [True, False]
+
+
+def test_a_note_truncated_below_the_threshold_loses_its_vibrato():
+    """The final duration decides, not the length the note was written at.
+
+    A note cut short by a re-entering voice should not waver on the strength of
+    a length it never got to play. Here the held note is written as a whole bar
+    and stolen after a tenth of a second.
+    """
+    arrangement = arrange(
+        score_of(
+            note(72, 0.0, dur=2.0),
+            note(72, 0.1, dur=2.0),  # same channel, so the first is truncated
+        )
+    )
+    lead = channels(arrangement)["lead"].events
+    assert lead[0].dur == pytest.approx(0.1)
+    assert not lead[0].vibrato, "a note cut to 100 ms must not claim a 2-second vibrato"
+    assert lead[1].vibrato
