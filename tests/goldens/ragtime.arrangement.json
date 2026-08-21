@@ -110,7 +110,7 @@
           "pitch": 75,
           "dur": 0.6,
           "vel": 8,
-          "vibrato": false
+          "vibrato": true
         },
         {
           "t": 2.55,
@@ -708,7 +708,7 @@
           "pitch": 63,
           "dur": 0.6,
           "vel": 8,
-          "vibrato": false
+          "vibrato": true
         },
         {
           "t": 2.6999999999999997,
@@ -1445,7 +1445,7 @@
           "pitch": 52,
           "dur": 0.6,
           "vel": 10,
-          "vibrato": false
+          "vibrato": true
         },
         {
           "t": 5.3999999999999995,
@@ -1466,7 +1466,7 @@
           "pitch": 52,
           "dur": 0.6,
           "vel": 10,
-          "vibrato": false
+          "vibrato": true
         },
         {
           "t": 6.6,
@@ -2726,7 +2726,7 @@
           "pitch": 40,
           "dur": 0.6,
           "vel": 10,
-          "vibrato": false
+          "vibrato": true
         },
         {
           "t": 5.3999999999999995,
@@ -2747,7 +2747,7 @@
           "pitch": 40,
           "dur": 0.6,
           "vel": 10,
-          "vibrato": false
+          "vibrato": true
         },
         {
           "t": 6.6,

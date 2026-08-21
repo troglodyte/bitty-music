@@ -311,3 +311,28 @@ def test_accent_never_silences_a_note_or_exceeds_the_ceiling():
     quietest = note(60, 0.0, velocity=1, beat_strength=0.25)
     assert _velocity(loudest) == 15
     assert _velocity(quietest) >= 1
+
+
+def test_sustained_notes_get_vibrato_and_short_ones_do_not():
+    arrangement = arrange(score_of(note(72, 0.0, dur=2.0), note(74, 2.0, dur=0.1)))
+    events = [e for c in arrangement.channels for e in c.events]
+    assert [e.vibrato for e in events] == [True, False]
+
+
+def test_a_note_truncated_below_the_threshold_loses_its_vibrato():
+    """The final duration decides, not the length the note was written at.
+
+    A note cut short by a re-entering voice should not waver on the strength of
+    a length it never got to play. Here the held note is written as a whole bar
+    and stolen after a tenth of a second.
+    """
+    arrangement = arrange(
+        score_of(
+            note(72, 0.0, dur=2.0),
+            note(72, 0.1, dur=2.0),  # same channel, so the first is truncated
+        )
+    )
+    lead = channels(arrangement)["lead"].events
+    assert lead[0].dur == pytest.approx(0.1)
+    assert not lead[0].vibrato, "a note cut to 100 ms must not claim a 2-second vibrato"
+    assert lead[1].vibrato

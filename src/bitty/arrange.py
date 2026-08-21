@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from itertools import groupby
 
 from bitty.arrangement import MAX_VELOCITY, Arrangement, Channel, Echo, Event
+from bitty.lfo import MIN_NOTE_SEC
 from bitty.model import Note, Score
 from bitty.voices import (
     ARP_ROLE,
@@ -191,8 +192,19 @@ def _distance(last_pitch: int | None, pitch: int) -> int:
 
 
 def _events(takes: list[_Take]) -> tuple[Event, ...]:
+    """Takes as contract events, flagging the ones long enough to waver.
+
+    The flag is applied here rather than in `_place` because a take's duration
+    is not final until every later note has had its chance to truncate it.
+    """
     return tuple(
-        Event(t=take.t, pitch=take.pitch, dur=take.dur, vel=take.vel)
+        Event(
+            t=take.t,
+            pitch=take.pitch,
+            dur=take.dur,
+            vel=take.vel,
+            vibrato=take.dur >= MIN_NOTE_SEC,
+        )
         for take in takes
         if take.dur > EPSILON
     )
