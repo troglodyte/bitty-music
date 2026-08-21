@@ -32,181 +32,211 @@
           "t": 0.0,
           "pitch": 69,
           "dur": 0.5,
-          "vel": 10
+          "vel": 10,
+          "vibrato": false
         },
         {
           "t": 0.5,
           "pitch": 71,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 1.0,
           "pitch": 73,
           "dur": 0.5,
-          "vel": 8
+          "vel": 8,
+          "vibrato": false
         },
         {
           "t": 1.5,
           "pitch": 76,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 2.0,
           "pitch": 73,
           "dur": 0.5,
-          "vel": 10
+          "vel": 10,
+          "vibrato": false
         },
         {
           "t": 2.5,
           "pitch": 71,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 3.0,
           "pitch": 69,
           "dur": 0.5,
-          "vel": 8
+          "vel": 8,
+          "vibrato": false
         },
         {
           "t": 3.5,
           "pitch": 73,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 4.0,
           "pitch": 69,
           "dur": 0.25,
-          "vel": 10
+          "vel": 10,
+          "vibrato": false
         },
         {
           "t": 4.25,
           "pitch": 71,
           "dur": 0.25,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 4.5,
           "pitch": 68,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 5.5,
           "pitch": 69,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 6.0,
           "pitch": 71,
           "dur": 0.5,
-          "vel": 10
+          "vel": 10,
+          "vibrato": false
         },
         {
           "t": 6.5,
           "pitch": 71,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 7.0,
           "pitch": 66,
           "dur": 0.5,
-          "vel": 8
+          "vel": 8,
+          "vibrato": false
         },
         {
           "t": 7.5,
           "pitch": 64,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 8.0,
           "pitch": 69,
           "dur": 0.5,
-          "vel": 10
+          "vel": 10,
+          "vibrato": false
         },
         {
           "t": 8.5,
           "pitch": 71,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 9.0,
           "pitch": 73,
           "dur": 0.5,
-          "vel": 8
+          "vel": 8,
+          "vibrato": false
         },
         {
           "t": 9.5,
           "pitch": 73,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 10.0,
           "pitch": 69,
           "dur": 0.5,
-          "vel": 10
+          "vel": 10,
+          "vibrato": false
         },
         {
           "t": 10.5,
           "pitch": 71,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 11.0,
           "pitch": 73,
           "dur": 0.5,
-          "vel": 8
+          "vel": 8,
+          "vibrato": false
         },
         {
           "t": 11.5,
           "pitch": 69,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 12.0,
           "pitch": 68,
           "dur": 0.5,
-          "vel": 10
+          "vel": 10,
+          "vibrato": false
         },
         {
           "t": 12.5,
           "pitch": 66,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 13.0,
           "pitch": 68,
           "dur": 1.0,
-          "vel": 8
+          "vel": 8,
+          "vibrato": false
         },
         {
           "t": 14.0,
           "pitch": 66,
           "dur": 1.0,
-          "vel": 10
+          "vel": 10,
+          "vibrato": false
         },
         {
           "t": 15.0,
           "pitch": 66,
           "dur": 0.5,
-          "vel": 8
+          "vel": 8,
+          "vibrato": false
         },
         {
           "t": 15.5,
           "pitch": 66,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         }
       ],
       "pan": -0.2,
@@ -243,157 +273,183 @@
           "t": 0.0,
           "pitch": 66,
           "dur": 0.5,
-          "vel": 10
+          "vel": 10,
+          "vibrato": false
         },
         {
           "t": 2.25,
           "pitch": 69,
           "dur": 0.25,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 2.5,
           "pitch": 68,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 3.5,
           "pitch": 68,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 4.0,
           "pitch": 66,
           "dur": 0.25,
-          "vel": 10
+          "vel": 10,
+          "vibrato": false
         },
         {
           "t": 4.25,
           "pitch": 68,
           "dur": 0.25,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 5.0,
           "pitch": 57,
           "dur": 0.5,
-          "vel": 8
+          "vel": 8,
+          "vibrato": false
         },
         {
           "t": 6.0,
           "pitch": 59,
           "dur": 0.5,
-          "vel": 10
+          "vel": 10,
+          "vibrato": false
         },
         {
           "t": 6.5,
           "pitch": 59,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 7.0,
           "pitch": 59,
           "dur": 0.25,
-          "vel": 8
+          "vel": 8,
+          "vibrato": false
         },
         {
           "t": 7.25,
           "pitch": 57,
           "dur": 0.25,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 7.5,
           "pitch": 56,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 8.0,
           "pitch": 54,
           "dur": 0.25,
-          "vel": 10
+          "vel": 10,
+          "vibrato": false
         },
         {
           "t": 8.5,
           "pitch": 56,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 9.0,
           "pitch": 57,
           "dur": 0.5,
-          "vel": 8
+          "vel": 8,
+          "vibrato": false
         },
         {
           "t": 9.5,
           "pitch": 64,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 10.0,
           "pitch": 66,
           "dur": 0.5,
-          "vel": 10
+          "vel": 10,
+          "vibrato": false
         },
         {
           "t": 10.5,
           "pitch": 66,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 11.0,
           "pitch": 68,
           "dur": 0.5,
-          "vel": 8
+          "vel": 8,
+          "vibrato": false
         },
         {
           "t": 11.5,
           "pitch": 66,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 12.0,
           "pitch": 66,
           "dur": 0.25,
-          "vel": 10
+          "vel": 10,
+          "vibrato": false
         },
         {
           "t": 12.25,
           "pitch": 65,
           "dur": 0.25,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 12.5,
           "pitch": 66,
           "dur": 0.25,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 14.5,
           "pitch": 64,
           "dur": 1.0,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 15.5,
           "pitch": 59,
           "dur": 0.25,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 15.75,
           "pitch": 58,
           "dur": 0.25,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         }
       ],
       "pan": 0.45,
@@ -421,193 +477,225 @@
           "t": 0.0,
           "pitch": 61,
           "dur": 0.5,
-          "vel": 10
+          "vel": 10,
+          "vibrato": false
         },
         {
           "t": 0.5,
           "pitch": 59,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 1.0,
           "pitch": 57,
           "dur": 0.5,
-          "vel": 8
+          "vel": 8,
+          "vibrato": false
         },
         {
           "t": 1.5,
           "pitch": 59,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 2.0,
           "pitch": 57,
           "dur": 0.25,
-          "vel": 10
+          "vel": 10,
+          "vibrato": false
         },
         {
           "t": 3.0,
           "pitch": 61,
           "dur": 0.5,
-          "vel": 8
+          "vel": 8,
+          "vibrato": false
         },
         {
           "t": 3.5,
           "pitch": 61,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 4.0,
           "pitch": 61,
           "dur": 0.25,
-          "vel": 10
+          "vel": 10,
+          "vibrato": false
         },
         {
           "t": 4.25,
           "pitch": 62,
           "dur": 0.25,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 4.5,
           "pitch": 61,
           "dur": 0.25,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 4.75,
           "pitch": 59,
           "dur": 0.25,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 5.0,
           "pitch": 61,
           "dur": 0.5,
-          "vel": 8
+          "vel": 8,
+          "vibrato": false
         },
         {
           "t": 5.5,
           "pitch": 61,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 7.5,
           "pitch": 61,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 8.0,
           "pitch": 61,
           "dur": 0.25,
-          "vel": 10
+          "vel": 10,
+          "vibrato": false
         },
         {
           "t": 8.25,
           "pitch": 62,
           "dur": 0.25,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 8.5,
           "pitch": 64,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 9.0,
           "pitch": 64,
           "dur": 0.5,
-          "vel": 8
+          "vel": 8,
+          "vibrato": false
         },
         {
           "t": 9.5,
           "pitch": 69,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 10.0,
           "pitch": 62,
           "dur": 0.5,
-          "vel": 10
+          "vel": 10,
+          "vibrato": false
         },
         {
           "t": 10.5,
           "pitch": 62,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 11.0,
           "pitch": 61,
           "dur": 0.5,
-          "vel": 8
+          "vel": 8,
+          "vibrato": false
         },
         {
           "t": 11.5,
           "pitch": 61,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 12.25,
           "pitch": 61,
           "dur": 0.25,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 12.5,
           "pitch": 61,
           "dur": 0.25,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 12.75,
           "pitch": 59,
           "dur": 0.25,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 13.0,
           "pitch": 61,
           "dur": 1.0,
-          "vel": 8
+          "vel": 8,
+          "vibrato": false
         },
         {
           "t": 14.0,
           "pitch": 61,
           "dur": 0.25,
-          "vel": 10
+          "vel": 10,
+          "vibrato": false
         },
         {
           "t": 14.25,
           "pitch": 62,
           "dur": 0.25,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 14.5,
           "pitch": 61,
           "dur": 1.0,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 15.5,
           "pitch": 62,
           "dur": 0.25,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 15.75,
           "pitch": 61,
           "dur": 0.25,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         }
       ],
       "pan": -0.45,
@@ -635,139 +723,162 @@
           "t": 0.5,
           "pitch": 64,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 1.0,
           "pitch": 64,
           "dur": 0.5,
-          "vel": 8
+          "vel": 8,
+          "vibrato": false
         },
         {
           "t": 1.5,
           "pitch": 64,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 2.0,
           "pitch": 64,
           "dur": 0.25,
-          "vel": 10
+          "vel": 10,
+          "vibrato": false
         },
         {
           "t": 2.25,
           "pitch": 64,
           "dur": 0.25,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 2.5,
           "pitch": 64,
           "dur": 0.25,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 2.75,
           "pitch": 62,
           "dur": 0.25,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 3.0,
           "pitch": 64,
           "dur": 0.5,
-          "vel": 8
+          "vel": 8,
+          "vibrato": false
         },
         {
           "t": 4.5,
           "pitch": 65,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 5.0,
           "pitch": 66,
           "dur": 0.5,
-          "vel": 8
+          "vel": 8,
+          "vibrato": false
         },
         {
           "t": 5.5,
           "pitch": 66,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 6.0,
           "pitch": 66,
           "dur": 0.5,
-          "vel": 10
+          "vel": 10,
+          "vibrato": false
         },
         {
           "t": 6.5,
           "pitch": 64,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 7.0,
           "pitch": 63,
           "dur": 0.5,
-          "vel": 8
+          "vel": 8,
+          "vibrato": false
         },
         {
           "t": 8.25,
           "pitch": 66,
           "dur": 0.25,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 8.5,
           "pitch": 61,
           "dur": 0.25,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 8.75,
           "pitch": 59,
           "dur": 0.25,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 9.0,
           "pitch": 57,
           "dur": 0.5,
-          "vel": 8
+          "vel": 8,
+          "vibrato": false
         },
         {
           "t": 10.0,
           "pitch": 62,
           "dur": 0.5,
-          "vel": 10
+          "vel": 10,
+          "vibrato": false
         },
         {
           "t": 12.0,
           "pitch": 62,
           "dur": 0.25,
-          "vel": 10
+          "vel": 10,
+          "vibrato": false
         },
         {
           "t": 12.75,
           "pitch": 54,
           "dur": 0.25,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 13.0,
           "pitch": 53,
           "dur": 1.0,
-          "vel": 8
+          "vel": 8,
+          "vibrato": false
         },
         {
           "t": 14.0,
           "pitch": 54,
           "dur": 0.5,
-          "vel": 10
+          "vel": 10,
+          "vibrato": false
         }
       ],
       "pan": 0.2,
@@ -794,199 +905,232 @@
           "t": 0.0,
           "pitch": 54,
           "dur": 0.5,
-          "vel": 10
+          "vel": 10,
+          "vibrato": false
         },
         {
           "t": 0.5,
           "pitch": 56,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 1.0,
           "pitch": 57,
           "dur": 0.5,
-          "vel": 8
+          "vel": 8,
+          "vibrato": false
         },
         {
           "t": 1.5,
           "pitch": 56,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 2.0,
           "pitch": 57,
           "dur": 0.25,
-          "vel": 10
+          "vel": 10,
+          "vibrato": false
         },
         {
           "t": 2.25,
           "pitch": 49,
           "dur": 0.25,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 2.5,
           "pitch": 52,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 3.0,
           "pitch": 45,
           "dur": 0.5,
-          "vel": 8
+          "vel": 8,
+          "vibrato": false
         },
         {
           "t": 3.5,
           "pitch": 53,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 4.0,
           "pitch": 54,
           "dur": 0.25,
-          "vel": 10
+          "vel": 10,
+          "vibrato": false
         },
         {
           "t": 4.25,
           "pitch": 47,
           "dur": 0.25,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 4.5,
           "pitch": 49,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 5.0,
           "pitch": 42,
           "dur": 0.5,
-          "vel": 8
+          "vel": 8,
+          "vibrato": false
         },
         {
           "t": 5.5,
           "pitch": 54,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 6.0,
           "pitch": 56,
           "dur": 0.25,
-          "vel": 10
+          "vel": 10,
+          "vibrato": false
         },
         {
           "t": 6.25,
           "pitch": 54,
           "dur": 0.25,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 6.5,
           "pitch": 56,
           "dur": 0.25,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 6.75,
           "pitch": 57,
           "dur": 0.25,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 7.0,
           "pitch": 59,
           "dur": 0.25,
-          "vel": 8
+          "vel": 8,
+          "vibrato": false
         },
         {
           "t": 7.25,
           "pitch": 47,
           "dur": 0.25,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 7.5,
           "pitch": 49,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 8.0,
           "pitch": 54,
           "dur": 0.5,
-          "vel": 10
+          "vel": 10,
+          "vibrato": false
         },
         {
           "t": 9.5,
           "pitch": 57,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 10.5,
           "pitch": 59,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 11.0,
           "pitch": 53,
           "dur": 0.5,
-          "vel": 8
+          "vel": 8,
+          "vibrato": false
         },
         {
           "t": 11.5,
           "pitch": 54,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 12.0,
           "pitch": 47,
           "dur": 0.25,
-          "vel": 10
+          "vel": 10,
+          "vibrato": false
         },
         {
           "t": 12.25,
           "pitch": 49,
           "dur": 0.25,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 12.5,
           "pitch": 50,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         },
         {
           "t": 13.0,
           "pitch": 49,
           "dur": 1.0,
-          "vel": 8
+          "vel": 8,
+          "vibrato": false
         },
         {
           "t": 14.0,
           "pitch": 46,
           "dur": 1.0,
-          "vel": 10
+          "vel": 10,
+          "vibrato": false
         },
         {
           "t": 15.0,
           "pitch": 47,
           "dur": 0.5,
-          "vel": 8
+          "vel": 8,
+          "vibrato": false
         },
         {
           "t": 15.5,
           "pitch": 49,
           "dur": 0.5,
-          "vel": 7
+          "vel": 7,
+          "vibrato": false
         }
       ],
       "pan": 0.0,

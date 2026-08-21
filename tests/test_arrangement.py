@@ -103,3 +103,45 @@ def test_unknown_instrument_fields_are_ignored():
     )
     arrangement = Arrangement.from_json(text)
     assert arrangement.channels[0].instrument.wave == "pulse"
+
+
+def test_vibrato_round_trips_through_json():
+    original = Arrangement(
+        meta={"title": "t", "bpm": 120.0},
+        channels=(
+            Channel(
+                role="lead",
+                instrument=Instrument(wave="pulse"),
+                events=(
+                    Event(t=0.0, pitch=60, dur=1.0, vel=10, vibrato=True),
+                    Event(t=1.0, pitch=62, dur=0.1, vel=10),
+                ),
+            ),
+        ),
+    )
+    restored = Arrangement.from_json(original.to_json())
+    assert [e.vibrato for e in restored.channels[0].events] == [True, False]
+
+
+def test_an_event_field_this_build_does_not_know_is_dropped_not_fatal():
+    """A newer bitty's arrangement should render with the fields we understand.
+
+    Instrument already promises this; Event did not, so an added field turned
+    every older build into a hard failure on load.
+    """
+    text = json.dumps(
+        {
+            "meta": {"title": "t", "bpm": 120.0},
+            "channels": [
+                {
+                    "role": "lead",
+                    "instrument": {"wave": "pulse"},
+                    "events": [
+                        {"t": 0.0, "pitch": 60, "dur": 1.0, "vel": 10, "tremolo": 0.5}
+                    ],
+                }
+            ],
+        }
+    )
+    restored = Arrangement.from_json(text)
+    assert restored.channels[0].events[0].pitch == 60

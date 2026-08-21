@@ -19,6 +19,7 @@ class Event:
     pitch: int  # MIDI note number
     dur: float  # seconds
     vel: int  # 0-15
+    vibrato: bool = False  # a delayed LFO on the pitch; see lfo.py
 
 
 @dataclass(frozen=True)
@@ -75,10 +76,20 @@ def _channel_from(raw: dict) -> Channel:
     return Channel(
         role=raw["role"],
         instrument=_instrument_from(raw["instrument"]),
-        events=tuple(Event(**event) for event in raw["events"]),
+        events=tuple(_event_from(e) for e in raw["events"]),
         pan=raw.get("pan", 0.0),
         echo=Echo(**echo) if echo else None,
     )
+
+
+def _event_from(raw: dict) -> Event:
+    """Build an Event, dropping any field this build does not know.
+
+    The same contract `_instrument_from` keeps, for the same reason: adding a
+    field should not turn every older build into a hard failure on load.
+    """
+    known = {f.name for f in fields(Event)}
+    return Event(**{k: v for k, v in raw.items() if k in known})
 
 
 def _instrument_from(raw: dict) -> Instrument:
