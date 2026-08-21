@@ -1,11 +1,15 @@
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from bitty import loop
 from bitty.analyze import analyze
+from bitty.arrange import arrange
+from bitty.arrangement import Arrangement, Channel, Echo, Event, Instrument, Loop
 from bitty.ingest import ingest
 from bitty.model import Bar, Note, Score
+from bitty.synth import SAMPLE_RATE, render
 
 MINUET = Path(__file__).parent / "fixtures" / "minuet.mxl"
 
@@ -165,3 +169,135 @@ def test_the_fixtures_generate_the_candidates_measured_in_the_plan():
     ):
         score = ingest(path)
         assert spans(loop.candidates(score, analyze(score))) == expected
+
+
+def pulse(seconds: float, hz: float = 100.0, amp: float = 0.5) -> np.ndarray:
+    """A square wave: full-amplitude edges every half period, by design."""
+    t = np.arange(int(seconds * SAMPLE_RATE)) / SAMPLE_RATE
+    wave = amp * np.sign(np.sin(2 * np.pi * hz * t))
+    return np.stack([wave, wave], axis=1)
+
+
+def bare(events=(), echo=None) -> Arrangement:
+    return Arrangement(
+        meta={},
+        channels=(
+            Channel(role="lead", instrument=Instrument(wave="pulse"),
+                    events=tuple(events), echo=echo),
+        ),
+    )
+
+
+def candidate(start: float, end: float, source: str = "section") -> loop.LoopCandidate:
+    return loop.LoopCandidate(first_bar=1, last_bar=8, start=start, end=end, source=source)
+
+
+def test_a_period_aligned_splice_passes_despite_full_amplitude_edges():
+    """The test that would have caught an absolute threshold.
+
+    A pulse wave steps between +A and -A every half period. That is ordinary
+    signal, not a click, and a metric that cannot tell the difference would
+    reject every loop in a square-wave piece.
+    """
+    audio = pulse(2.0, hz=100.0)  # 100 Hz: 0.5 s is a whole number of periods
+    chosen = loop.choose((candidate(0.5, 1.5),), audio, bare(), SAMPLE_RATE)
+    assert chosen is not None
+    # A hard zero-crossing 100 periods out: sin(2*pi*100*t) at t=0.5 and t=1.5
+    # round to tiny values of opposite sign, so the splice ties the ordinary
+    # edge magnitude exactly rather than falling under it. choose() accepts on
+    # <=, matching that boundary.
+    assert chosen.ratio <= loop.SEAM_RATIO
+
+
+def test_a_splice_larger_than_the_piece_ever_makes_is_rejected():
+    audio = pulse(2.0, hz=100.0, amp=0.2)
+    audio[SAMPLE_RATE // 2] = 1.0  # loop start lands on a sample the music never reaches
+    assert loop.choose((candidate(0.5, 1.5),), audio, bare(), SAMPLE_RATE) is None
+
+
+def test_choose_falls_through_a_failing_candidate_to_the_next():
+    audio = pulse(3.0, hz=100.0, amp=0.2)
+    audio[SAMPLE_RATE // 2] = 1.0
+    chosen = loop.choose(
+        (candidate(0.5, 1.5), candidate(1.0, 2.0)), audio, bare(), SAMPLE_RATE
+    )
+    assert chosen is not None
+    assert chosen.candidate.start == 1.0
+
+
+def test_choose_returns_nothing_when_every_candidate_fails():
+    audio = pulse(2.0, hz=100.0, amp=0.2)
+    audio[SAMPLE_RATE // 2] = 1.0
+    assert loop.choose((candidate(0.5, 1.5),), audio, bare(), SAMPLE_RATE) is None
+
+
+def test_no_candidates_at_all_is_not_a_loop():
+    assert loop.choose((), pulse(1.0), bare(), SAMPLE_RATE) is None
+
+
+def test_a_dry_note_sustaining_across_the_loop_end_severs_the_candidate():
+    events = (Event(t=0.9, pitch=60, dur=0.5, vel=10),)  # ends at 1.4, past 1.0
+    assert loop.choose((candidate(0.0, 1.0),), pulse(2.0), bare(events), SAMPLE_RATE) is None
+
+
+def test_a_note_ending_exactly_at_the_loop_end_does_not_sever():
+    """Float onsets; the comparison has to be epsilon-tolerant on this side.
+
+    Written the other way, every final note counts as severed and no
+    bar-aligned candidate ever passes.
+    """
+    events = (Event(t=0.5, pitch=60, dur=0.5, vel=10),)
+    assert loop.choose((candidate(0.0, 1.0),), pulse(2.0), bare(events), SAMPLE_RATE) is not None
+
+
+def test_the_same_pitch_sounding_at_the_loop_start_continues_rather_than_severs():
+    events = (
+        Event(t=0.9, pitch=60, dur=0.5, vel=10),
+        Event(t=0.0, pitch=60, dur=0.4, vel=10),
+    )
+    chosen = loop.choose((candidate(0.0, 1.0),), pulse(2.0), bare(events), SAMPLE_RATE)
+    assert chosen is not None
+
+
+def test_an_echo_tail_crossing_the_loop_end_is_counted_but_never_rejects():
+    """Measured: rejecting on this kills every candidate on two of three fixtures."""
+    events = (Event(t=0.5, pitch=60, dur=0.5, vel=10),)  # dry ends at 1.0, echo at 1.38
+    arrangement = bare(events, echo=Echo(delay_sec=0.38, level=0.35))
+    chosen = loop.choose((candidate(0.0, 1.0),), pulse(2.0), arrangement, SAMPLE_RATE)
+    assert chosen is not None
+    assert chosen.echo_tails == 1
+    assert "echo tail cut" in chosen.describe()
+
+
+def test_a_manual_candidate_is_returned_even_when_both_tests_fail():
+    audio = pulse(2.0, hz=100.0, amp=0.2)
+    audio[SAMPLE_RATE // 2] = 1.0
+    events = (Event(t=0.9, pitch=60, dur=0.7, vel=10),)  # ends at 1.6, past 1.5
+    chosen = loop.choose(
+        (candidate(0.5, 1.5, source="manual"),), audio, bare(events), SAMPLE_RATE
+    )
+    assert chosen is not None
+    assert chosen.loop == Loop(start_sec=0.5, end_sec=1.5)
+    assert chosen.severed == 1  # measured and reported, not acted on
+
+
+def test_describe_names_the_source_and_the_seam():
+    audio = pulse(2.0, hz=100.0)
+    chosen = loop.choose((candidate(0.5, 1.5, source="repeat"),), audio, bare(), SAMPLE_RATE)
+    assert chosen.describe() == "repeat marks, seam ok"
+
+
+def test_the_fixtures_pick_what_the_plan_measured():
+    for path, expected in (
+        (MINUET, (1, 8, "repeat marks, seam ok")),
+        (RAGTIME, (1, 16, "repeat marks, seam ok, echo tail cut")),
+        (CHORALE, (1, 8, "section boundaries, seam ok, echo tail cut")),
+    ):
+        score = ingest(path)
+        arrangement = arrange(score)
+        audio = render(arrangement)
+        chosen = loop.choose(
+            loop.candidates(score, analyze(score)), audio, arrangement, SAMPLE_RATE
+        )
+        assert chosen is not None, path.name
+        assert (chosen.candidate.first_bar, chosen.candidate.last_bar, chosen.describe()) == expected

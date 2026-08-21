@@ -14,6 +14,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
+import numpy as np
+
+from bitty.arrangement import Arrangement, Loop
 from bitty.model import Bar, Score
 
 EPSILON = 1e-6  # onset times are floats; matches arrange.EPSILON
@@ -158,3 +161,106 @@ def _from_sections(sections) -> list[LoopCandidate]:
 
 def _length(first: Bar, last: Bar) -> int:
     return last.number - first.number + 1
+
+
+SEAM_RATIO = 1.0  # see the spec's calibration table: real candidates measure 0.02-0.38
+ORDINARY_PERCENTILE = 99.9
+
+SOURCE_WORDS = {
+    "repeat": "repeat marks",
+    "section": "section boundaries",
+    "manual": "manual",
+}
+
+
+@dataclass(frozen=True)
+class Choice:
+    """The picked loop and the evidence for it, so the tool can say why."""
+
+    loop: Loop
+    candidate: LoopCandidate
+    ratio: float  # splice step over what this piece ordinarily steps
+    severed: int  # dry notes cut by the splice
+    echo_tails: int  # echo tails cut; reported, never rejected
+
+    def describe(self) -> str:
+        parts = [SOURCE_WORDS.get(self.candidate.source, self.candidate.source)]
+        if self.severed:
+            parts.append(f"cuts {self.severed} notes")
+        elif self.ratio > SEAM_RATIO:
+            parts.append(f"seam ratio {self.ratio:.2f}, over {SEAM_RATIO:g}")
+        else:
+            parts.append("seam ok")
+        if self.echo_tails:
+            parts.append("echo tail cut")
+        return ", ".join(parts)
+
+
+def choose(
+    candidates: tuple[LoopCandidate, ...],
+    audio: np.ndarray,
+    arrangement: Arrangement,
+    sample_rate: int,
+) -> Choice | None:
+    """The first candidate whose seam holds, or None.
+
+    Manual candidates return regardless: the person typed a bar number, and the
+    tool reports what it thinks without overruling them.
+    """
+    if not candidates or len(audio) < 2:
+        return None
+
+    ordinary = float(np.percentile(np.abs(np.diff(audio, axis=0)), ORDINARY_PERCENTILE))
+    for candidate in candidates:
+        verdict = _measure(candidate, audio, arrangement, sample_rate, ordinary)
+        if candidate.source == "manual" or (
+            verdict.ratio <= SEAM_RATIO and not verdict.severed
+        ):
+            return verdict
+    return None
+
+
+def _measure(
+    candidate: LoopCandidate,
+    audio: np.ndarray,
+    arrangement: Arrangement,
+    sample_rate: int,
+    ordinary: float,
+) -> Choice:
+    first = min(round(candidate.start * sample_rate), len(audio) - 1)
+    last = min(round(candidate.end * sample_rate), len(audio))
+    splice = float(np.max(np.abs(audio[first] - audio[last - 1])))
+    severed, echo_tails = _crossings(arrangement, candidate)
+    return Choice(
+        loop=Loop(start_sec=candidate.start, end_sec=candidate.end),
+        candidate=candidate,
+        ratio=splice / ordinary if ordinary else 0.0,
+        severed=severed,
+        echo_tails=echo_tails,
+    )
+
+
+def _crossings(arrangement: Arrangement, candidate: LoopCandidate) -> tuple[int, int]:
+    """Dry notes and echo tails cut by the splice, counted separately.
+
+    Separately because only the first one rejects. Measured across the
+    fixtures, the lead's final note echoes past the loop end on nearly every
+    candidate there is — rejecting on that leaves two of three fixtures with no
+    loop at all, which is the feature shipping dead.
+    """
+    severed = tails = 0
+    for channel in arrangement.channels:
+        delay = channel.echo.delay_sec if channel.echo else 0.0
+        held = {
+            event.pitch
+            for event in channel.events
+            if event.t <= candidate.start + EPSILON < event.t + event.dur - EPSILON
+        }
+        for event in channel.events:
+            if event.t >= candidate.end - EPSILON or event.pitch in held:
+                continue
+            if event.t + event.dur > candidate.end + EPSILON:
+                severed += 1
+            elif delay and event.t + event.dur + delay > candidate.end + EPSILON:
+                tails += 1
+    return severed, tails
