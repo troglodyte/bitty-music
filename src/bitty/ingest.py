@@ -4,14 +4,48 @@ from collections import defaultdict
 from dataclasses import replace
 from pathlib import Path
 
-from music21 import chord, converter, dynamics, expressions, key, meter, note, tempo
+from music21 import chord, converter, dynamics, expressions, key, meter, note, stream, tempo
 
-from bitty.model import Note, Score
+from bitty.model import Bar, Note, Score
 
 DEFAULT_BPM = 120.0
 DEFAULT_VELOCITY = 64
 NEUTRAL_BEAT_STRENGTH = 0.5
 GRACE_SEC = 0.032
+
+
+def _bars(parsed, seconds_per_quarter: float) -> tuple[Bar, ...]:
+    """The bar timeline, read from the first part.
+
+    A score states a time or key signature once, on the measure where it
+    changes, so both carry forward. Reading measures rather than a flattened
+    score matters: flattening reports each signature once per part, at
+    offsets that do not identify a bar.
+    """
+    if not parsed.parts:
+        return ()
+
+    time_signature = (4, 4)
+    sharps = 0
+    bars: list[Bar] = []
+    for measure in parsed.parts[0].getElementsByClass(stream.Measure):
+        if measure.timeSignature is not None:
+            time_signature = (
+                int(measure.timeSignature.numerator),
+                int(measure.timeSignature.denominator),
+            )
+        if measure.keySignature is not None:
+            sharps = int(measure.keySignature.sharps)
+        bars.append(
+            Bar(
+                number=int(measure.number),
+                start=float(measure.offset) * seconds_per_quarter,
+                dur=float(measure.quarterLength) * seconds_per_quarter,
+                time_signature=time_signature,
+                sharps=sharps,
+            )
+        )
+    return tuple(bars)
 
 
 def ingest(path: str | Path) -> Score:
@@ -54,6 +88,7 @@ def ingest(path: str | Path) -> Score:
         bpm=bpm,
         time_signature=_first_time_signature(parsed),
         title=_title_of(parsed, path),
+        bars=_bars(parsed, seconds_per_quarter),
     )
 
 

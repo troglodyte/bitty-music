@@ -7,6 +7,8 @@ from bitty.ingest import ingest
 FIXTURE = Path(__file__).parent / "fixtures" / "two_part.musicxml"
 MINUET = Path(__file__).parent / "fixtures" / "minuet.mxl"
 ORNAMENTS = Path(__file__).parent / "fixtures" / "ornaments.musicxml"
+CHORALE = Path(__file__).parent / "fixtures" / "chorale.mxl"
+RAGTIME = Path(__file__).parent / "fixtures" / "ragtime.mxl"
 
 
 def test_ingest_reads_every_note():
@@ -105,3 +107,30 @@ def test_a_grace_note_borrows_from_its_principal_rather_than_shifting_it():
     principal = next(n for n in score.notes if n.pitch == 77)
     # The principal is written as a quarter, which is 0.5 s at the default 120 bpm.
     assert grace.start + grace.dur + principal.dur == pytest.approx(grace.start + 0.5)
+
+
+def test_ingest_builds_a_bar_timeline():
+    score = ingest(MINUET)
+    assert len(score.bars) == 16
+    assert [b.number for b in score.bars[:3]] == [1, 2, 3]
+
+
+def test_bar_times_follow_the_tempo():
+    """Minuet is 3/4 with no tempo mark, so 120 bpm: three quarters = 1.5 s."""
+    score = ingest(MINUET)
+    assert score.bars[0].start == 0.0
+    assert score.bars[0].dur == 1.5
+    assert score.bars[1].start == 1.5
+    assert score.bars[-1].start == pytest.approx(22.5)
+
+
+def test_bars_carry_the_signatures_forward():
+    """A score states its signatures once; every later bar still has them."""
+    score = ingest(MINUET)
+    assert all(b.time_signature == (3, 4) for b in score.bars)
+    assert all(b.sharps == 1 for b in score.bars)
+
+
+def test_bar_durations_track_the_meter():
+    assert ingest(CHORALE).bars[0].dur == 2.0    # 4/4 at 120
+    assert ingest(RAGTIME).bars[0].dur == 1.2    # 2/4 at 100
