@@ -1,15 +1,24 @@
 from pathlib import Path
 
+import pytest
+
 from bitty import voices
-from bitty.arrange import arrange
+from bitty.arrange import _velocity, arrange
 from bitty.ingest import ingest
 from bitty.model import Note, Score
 
 FIXTURE = Path(__file__).parent / "fixtures" / "two_part.musicxml"
 
 
-def note(pitch, start, dur=1.0, velocity=64, part=0):
-    return Note(pitch=pitch, start=start, dur=dur, velocity=velocity, part=part)
+def note(pitch, start, dur=1.0, velocity=64, part=0, beat_strength=0.5):
+    return Note(
+        pitch=pitch,
+        start=start,
+        dur=dur,
+        velocity=velocity,
+        part=part,
+        beat_strength=beat_strength,
+    )
 
 
 def score_of(*notes, bpm=120.0, title="test"):
@@ -287,3 +296,18 @@ def test_the_arpeggio_never_overlaps_the_channel_s_own_notes():
     events = channels(arrangement)["inner_b"].events
     for earlier, later in zip(events, events[1:]):
         assert earlier.t + earlier.dur <= later.t + 1e-6
+
+
+def test_a_downbeat_is_louder_than_a_weak_beat():
+    downbeat = _velocity(note(60, 0.0, beat_strength=1.0))
+    secondary = _velocity(note(60, 0.0, beat_strength=0.5))
+    weak = _velocity(note(60, 0.0, beat_strength=0.25))
+    assert downbeat == secondary + 2
+    assert weak == secondary - 1
+
+
+def test_accent_never_silences_a_note_or_exceeds_the_ceiling():
+    loudest = note(60, 0.0, velocity=127, beat_strength=1.0)
+    quietest = note(60, 0.0, velocity=1, beat_strength=0.25)
+    assert _velocity(loudest) == 15
+    assert _velocity(quietest) >= 1

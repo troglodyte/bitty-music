@@ -32,6 +32,11 @@ from bitty.voices import (
 EPSILON = 1e-6  # onset times are floats; anything closer than this is one moment
 ARP_STEP_SEC = 0.016  # the spec's [arp] rate_ms = 16
 
+DOWNBEAT_STRENGTH = 1.0
+SECONDARY_STRENGTH = 0.5
+DOWNBEAT_ACCENT = 2
+WEAK_BEAT_TRIM = -1
+
 
 @dataclass
 class _Take:
@@ -122,7 +127,7 @@ def _place(takes: list[_Take], note: Note) -> None:
             t=note.start,
             pitch=note.pitch,
             dur=note.dur,
-            vel=_quantize_velocity(note.velocity),
+            vel=_velocity(note),
         )
     )
 
@@ -193,9 +198,23 @@ def _events(takes: list[_Take]) -> tuple[Event, ...]:
     )
 
 
-def _quantize_velocity(velocity: int) -> int:
-    """127 MIDI steps down to the 16 levels an 8-bit channel actually has."""
-    return max(0, min(MAX_VELOCITY, round(velocity / 127 * MAX_VELOCITY)))
+def _velocity(note: Note) -> int:
+    """The written dynamic, quantized, then lifted or trimmed by metric position.
+
+    Quantize first and accent second: the 16 levels are the texture, and an
+    accent that vanished into rounding would not be an accent. The clamp keeps
+    a trim from silencing a note outright.
+    """
+    level = round(note.velocity / 127 * MAX_VELOCITY)
+    return max(1, min(MAX_VELOCITY, level + _accent(note.beat_strength)))
+
+
+def _accent(beat_strength: float) -> int:
+    if beat_strength >= DOWNBEAT_STRENGTH:
+        return DOWNBEAT_ACCENT
+    if beat_strength >= SECONDARY_STRENGTH:
+        return 0
+    return WEAK_BEAT_TRIM
 
 
 def _arpeggiate(
@@ -221,7 +240,7 @@ def _arpeggiate(
         # ended must not keep sounding just because the arpeggio is still running.
         span = min([n.dur for n in notes] + [take.dur for take in absorbed])
         vel = max(
-            [_quantize_velocity(n.velocity) for n in notes] + [take.vel for take in absorbed]
+            [_velocity(n) for n in notes] + [take.vel for take in absorbed]
         )
         out.extend(_arp_cycle(onset, span, pitches, vel))
 
