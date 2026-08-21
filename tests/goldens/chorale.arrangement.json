@@ -1,7 +1,11 @@
 {
   "meta": {
     "title": "chorale",
-    "bpm": 120.0
+    "bpm": 120.0,
+    "bars": [
+      1,
+      8
+    ]
   },
   "channels": [
     {
@@ -1136,5 +1140,6 @@
       "pan": 0.0,
       "echo": null
     }
-  ]
+  ],
+  "loop": null
 }

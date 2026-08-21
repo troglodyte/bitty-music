@@ -55,9 +55,23 @@ class Channel:
 
 
 @dataclass(frozen=True)
+class Loop:
+    """Where the audio comes back around. Seconds, like every other time here.
+
+    Two floats and no more. `source` and the measured seam explain a decision
+    already made; this file is the hand-edit surface, where an extra field
+    invites someone to change it and expect something to happen.
+    """
+
+    start_sec: float
+    end_sec: float
+
+
+@dataclass(frozen=True)
 class Arrangement:
     meta: dict
     channels: tuple[Channel, ...]
+    loop: Loop | None = None
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), indent=2)
@@ -68,6 +82,7 @@ class Arrangement:
         return cls(
             meta=raw["meta"],
             channels=tuple(_channel_from(c) for c in raw["channels"]),
+            loop=_loop_from(raw.get("loop")),
         )
 
 
@@ -90,6 +105,14 @@ def _event_from(raw: dict) -> Event:
     """
     known = {f.name for f in fields(Event)}
     return Event(**{k: v for k, v in raw.items() if k in known})
+
+
+def _loop_from(raw: dict | None) -> Loop | None:
+    """Same drop-unknown-fields contract the other loaders keep."""
+    if not raw:
+        return None
+    known = {f.name for f in fields(Loop)}
+    return Loop(**{k: v for k, v in raw.items() if k in known})
 
 
 def _instrument_from(raw: dict) -> Instrument:
