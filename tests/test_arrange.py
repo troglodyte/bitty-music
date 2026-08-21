@@ -74,6 +74,42 @@ def test_grace_notes_survive_as_short_notes():
     assert grace[0].dur == 0.032
 
 
+def test_the_melody_keeps_the_lead_while_the_accompaniment_strides_alone():
+    """Ragtime's left hand restrikes on the offbeat while the melody rests, and
+    its notes abut the previous chord exactly, so nothing is ringing and no rest
+    separates them. Pinning that fragment by its own extremes crowns the stride
+    bass's top note as the melody, and the tune teleports down a tenth and back
+    every other beat."""
+    arrangement = arrange(
+        score_of(
+            note(75, 0.0, dur=1.0),
+            note(60, 0.0, dur=1.0),
+            note(48, 0.0, dur=1.0),
+            note(56, 1.0, dur=1.0),  # the left hand alone, abutting the chord
+            note(44, 1.0, dur=1.0),
+            note(75, 2.0, dur=1.0),  # the melody returns
+        )
+    )
+    assert pitches(arrangement, "lead") == [75, 75]
+
+
+def test_a_spent_ornament_does_not_stand_in_the_texture():
+    """A grace note parked on an inner channel is a 32 ms blip, not a line. Let
+    it keep a vote on where the top of the texture is and the melody dipping
+    below it loses the lead — then the inner channel it landed on holds that
+    high pitch and goes on blocking the lead for every note after."""
+    arrangement = arrange(
+        score_of(
+            note(81, 0.0, dur=0.5),
+            note(83, 0.0, dur=0.0),  # the ornament, written above the melody
+            note(60, 0.0, dur=0.5),
+            note(79, 0.5, dur=0.5),  # the melody carries on, below the ornament
+            note(59, 0.5, dur=0.5),
+        )
+    )
+    assert pitches(arrangement, "lead") == [81, 79]
+
+
 def test_a_moving_inner_note_does_not_steal_the_bass():
     """The mirror of the lead case: the bottom of the texture is pinned too."""
     arrangement = arrange(

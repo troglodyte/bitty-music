@@ -42,6 +42,7 @@ class _Take:
     pitch: int
     dur: float
     vel: int
+    ornament: bool = False  # a floored grace note: it sounds, but it is not a line
 
 
 Tracks = dict[str, list[_Take]]
@@ -90,45 +91,13 @@ def _assign(score: Score) -> tuple[Tracks, list[tuple[float, list[Note]]]]:
         graces = [note for note in group if note.dur <= EPSILON] if pending else []
         if not pending:
             pending = list(group)
-        sounding = [
-            pitch
-            for pitch in (_sounding(tracks[voice.role], onset) for voice in ROSTER)
-            if pitch is not None
-        ]
-        # Pinning is judged against the whole sounding texture, not just this
-        # onset: a lone moving inner note must not displace a lead that is still
-        # ringing.
-        #
-        # After a real rest nothing rings, and then the comparison falls back to
-        # what each channel last played, so a note re-entering alone joins the
-        # voice it continues instead of defaulting to the lead. The rest has to
-        # be real: homophonic writing ends every note exactly where the next
-        # begins, and treating that as silence would stop a descending soprano
-        # from ever reaching the lead.
-        last_end = max(
-            (takes[-1].t + takes[-1].dur for takes in tracks.values() if takes),
-            default=None,
-        )
-        after_rest = last_end is not None and last_end < onset - EPSILON
-        # Only a lone note needs its voice inferred. A chord re-entering after a
-        # rest defines its own texture: its top is the top and its bottom is the
-        # bottom, and measuring it against the previous phrase leaves both edge
-        # channels silent.
-        reference = sounding or (
-            [
-                pitch
-                for pitch in (_last_pitch(tracks[voice.role]) for voice in ROSTER)
-                if pitch is not None
-            ]
-            if after_rest and len(pending) == 1
-            else []
-        )
-
-        if not reference or pending[0].pitch >= max(reference):
+        above = _texture(tracks, onset, without=LEAD_ROLE)
+        if not above or pending[0].pitch >= max(above):
             _place(tracks[LEAD_ROLE], pending.pop(0))
             used.add(LEAD_ROLE)
 
-        if pending and (not reference or pending[-1].pitch <= min(reference)):
+        below = _texture(tracks, onset, without=BASS_ROLE)
+        if pending and (not below or pending[-1].pitch <= min(below)):
             _place(tracks[BASS_ROLE], pending.pop())
             used.add(BASS_ROLE)
 
@@ -163,8 +132,33 @@ def _place(takes: list[_Take], note: Note) -> None:
             pitch=note.pitch,
             dur=max(note.dur, GRACE_SEC),
             vel=_quantize_velocity(note.velocity),
+            ornament=note.dur <= EPSILON,
         )
     )
+
+
+def _texture(tracks: Tracks, onset: float, *, without: str) -> list[int]:
+    """The standing texture a candidate for `without`'s pin is measured against.
+
+    Every channel counts, at what it is holding or — once silent — at what it
+    played last. Judging a pin against only the notes still ringing means a
+    fragment of the texture restriking alone gets pinned by its own extremes:
+    ragtime's left hand strides on while the melody rests, and the top of the
+    stride is crowned the tune.
+
+    The pinned channel is the exception, and counts only while it rings. A
+    ringing lead cannot be displaced by a passing inner voice; a silent one has
+    no claim on a line it is no longer playing, so a soprano descending in a
+    chorale need only top the rest of the texture to keep the lead.
+    """
+    standing: list[int] = []
+    for voice in ROSTER:
+        takes = tracks[voice.role]
+        held = _sounding(takes, onset)
+        pitch = held if held is not None else (None if voice.role == without else _last_pitch(takes))
+        if pitch is not None:
+            standing.append(pitch)
+    return standing
 
 
 def _sounding(takes: list[_Take], t: float) -> int | None:
@@ -175,7 +169,17 @@ def _sounding(takes: list[_Take], t: float) -> int | None:
 
 
 def _last_pitch(takes: list[_Take]) -> int | None:
-    return takes[-1].pitch if takes else None
+    """The last pitch this channel actually sang, ignoring spent ornaments.
+
+    A grace note is written above the note it decorates, so a channel that
+    caught one is left holding a pitch well above its own line. Counting that
+    as the channel's voice costs the melody the lead the moment it dips below
+    the ornament, and keeps costing it until the channel next plays.
+    """
+    for take in reversed(takes):
+        if not take.ornament:
+            return take.pitch
+    return None
 
 
 def _pick_middle(tracks: Tracks, onset: float, note: Note, used: set[str]) -> str | None:
