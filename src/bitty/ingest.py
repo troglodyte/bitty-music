@@ -1,5 +1,7 @@
 """Score files to the internal Score model, via music21."""
 
+from collections import defaultdict
+from dataclasses import replace
 from pathlib import Path
 
 from music21 import chord, converter, dynamics, expressions, key, meter, note, tempo
@@ -9,6 +11,7 @@ from bitty.model import Note, Score
 DEFAULT_BPM = 120.0
 DEFAULT_VELOCITY = 64
 NEUTRAL_BEAT_STRENGTH = 0.5
+GRACE_SEC = 0.032
 
 
 def ingest(path: str | Path) -> Score:
@@ -44,6 +47,7 @@ def ingest(path: str | Path) -> Score:
                         )
                     )
 
+    notes = _shape_graces(notes)
     notes.sort(key=lambda n: (n.start, -n.pitch))
     return Score(
         notes=tuple(notes),
@@ -59,6 +63,47 @@ def _pitches_of(element) -> list[int]:
     if isinstance(element, note.Note):
         return [int(element.pitch.midi)]
     return []
+
+
+def _shape_graces(notes: list[Note]) -> list[Note]:
+    """Move grace notes in front of the notes they decorate.
+
+    music21 hands over a grace at zero duration and at its principal's onset,
+    which would sound as a cluster. The grace takes 32 ms from the front of the
+    principal — capped at half of it, so an ornament on an already short note
+    cannot swallow it — and the pair occupies the principal's original span, so
+    nothing after it moves.
+    """
+    graced: dict[tuple[int, float], list[Note]] = defaultdict(list)
+    for note in notes:
+        if note.dur == 0.0:
+            graced[(note.part, note.start)].append(note)
+    if not graced:
+        return notes
+
+    slots: dict[tuple[int, float], float] = {}
+    for key_, group in graced.items():
+        part, start = key_
+        spans = [n.dur for n in notes if n.part == part and n.start == start and n.dur > 0.0]
+        room = min(spans) / 2.0 if spans else GRACE_SEC * len(group)
+        slots[key_] = min(GRACE_SEC * len(group), room)
+
+    shaped: list[Note] = []
+    taken: dict[tuple[int, float], int] = defaultdict(int)
+    for note in notes:
+        key_ = (note.part, note.start)
+        if key_ not in slots:
+            shaped.append(note)
+            continue
+        total = slots[key_]
+        if note.dur == 0.0:
+            each = total / len(graced[key_])
+            index = taken[key_]
+            taken[key_] += 1
+            shaped.append(replace(note, start=note.start + index * each, dur=each))
+        else:
+            shaped.append(replace(note, start=note.start + total, dur=note.dur - total))
+    return shaped
 
 
 def _realized(element, key_signature):

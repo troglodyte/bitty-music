@@ -81,3 +81,27 @@ def test_ingest_expands_a_mordent_and_keeps_the_note_length():
     second_beat = [n for n in score.notes if 0.5 <= n.start < 1.0]
     assert len(second_beat) == 3, "mordent: upper, neighbour, then the note itself"
     assert sum(n.dur for n in second_beat) == pytest.approx(0.5)
+
+
+def test_ingest_gives_every_note_a_real_duration():
+    """The post-condition Task 5's deletions depend on."""
+    for fixture in (FIXTURE, MINUET, ORNAMENTS):
+        assert all(n.dur > 0.0 for n in ingest(fixture).notes)
+
+
+def test_a_grace_note_sounds_before_the_note_it_decorates():
+    score = ingest(ORNAMENTS)
+    grace = next(n for n in score.notes if n.pitch == 79)  # G5
+    principal = next(n for n in score.notes if n.pitch == 77)  # F5
+    assert grace.start < principal.start
+    assert grace.start + grace.dur == pytest.approx(principal.start)
+    assert grace.dur == pytest.approx(0.032)
+
+
+def test_a_grace_note_borrows_from_its_principal_rather_than_shifting_it():
+    """The pair occupies the principal's original span, so nothing downstream moves."""
+    score = ingest(ORNAMENTS)
+    grace = next(n for n in score.notes if n.pitch == 79)
+    principal = next(n for n in score.notes if n.pitch == 77)
+    # The principal is written as a quarter, which is 0.5 s at the default 120 bpm.
+    assert grace.start + grace.dur + principal.dur == pytest.approx(grace.start + 0.5)
