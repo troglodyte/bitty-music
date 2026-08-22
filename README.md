@@ -518,6 +518,16 @@ A dropped voice's `[voices.<role>]` overrides are still accepted; they
 just have nothing to apply to unless a later config layer raises `count`
 again.
 
+**Count 3 is legal but not yet musical for a dense score.** With only one
+middle voice, `_pick_middle` can place at most one note per onset, and
+everything else overflows into the arpeggio on `counter`. Measured on the
+shipped fixtures, that overflow dominates: the minuet's arp carrier fires
+819 times at `count = 3` versus 35 at `count = 4` (16.7% of its notes
+overflow, most of it landing as a near-continuous 16ms trill); chorale and
+ragtime show the same pattern. `nes-tight` therefore ships at `count = 4`
+rather than the honest 3. Making 3 sound good is arranger work — spreading
+overflow more gently, or giving it a second carrier — not yet done.
+
 ### Milliseconds in the file, seconds in the code
 
 Every key ending in `_ms` — `arp.rate_ms`, `vibrato.delay_ms`,
@@ -530,11 +540,14 @@ carry the other side's convention.
 
 Two ship in `presets/`, selected with `--preset NAME`:
 
-- **`nes-tight`** — closer to the hardware: `count = 3`, no echo, a mono
+- **`nes-tight`** — closer to the hardware: `count = 4`, no echo, a mono
   image (every voice's pan pinned to `0.0`), and vibrato that arrives
-  later and shallower. Two pulses and a triangle is the NES melodic
-  roster, so this is a genuine three-channel reduction, not a
-  timbre-only approximation of one.
+  later and shallower. Four channels, not the NES's true
+  two-pulses-and-a-triangle melodic roster — three pulses sound at once
+  here, which no NES can do. `count = 3` would be the honest roster, but
+  an audition found the arranger folds too much of the piece onto the
+  lone middle voice's arpeggio to sound musical; see the caveat under
+  `[voices] count` below.
 - **`lush`** — the other direction: a longer, louder echo, a wide stereo
   image, and vibrato that arrives early enough to sing on ordinary
   phrase-length notes.
@@ -564,13 +577,16 @@ analysis, and looping — the loop cascade, `--bars` and `--loop-from`, and the
 intro/loop split. Phase 5 is done, both halves: 5a's `Render` contract, the
 `bevy`, `bevy-kira`, and `generic` targets, and `music.ron` assembly; 5b's
 TOML config, the precedence cascade, and the two shipped presets. Phase 6 is
-done pending its audition: `[voices] count`, narrowing the roster down to as
-few as three voices, and `nes-tight` as a genuine three-channel NES
-reduction rather than a timbre-only approximation of one.
+done: `[voices] count`, narrowing the roster down to as few as three
+voices, and `nes-tight` at `count = 4` — closer to the NES's true
+two-pulses-and-a-triangle roster than the five-voice default, though not
+that roster itself; an audition found `count = 3` overflows into a
+near-continuous arpeggio on a dense score.
 
 Deliberately still ahead: `[transform]` (`transpose`, `tempo_scale`) as its
-own phase with its own auditions, and tail-wrapping, deferred since Phase 4b
-pending an audition of its own.
+own phase with its own auditions, tail-wrapping, deferred since Phase 4b
+pending an audition of its own, and a musical `count = 3` — the honest
+two-pulse NES roster, blocked on arranger work to soften the overflow.
 
 Design documents and per-phase implementation plans live in
 `docs/superpowers/`.

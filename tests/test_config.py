@@ -292,20 +292,28 @@ def test_nes_tight_turns_the_echo_off_and_centres_the_image():
         assert voice.instrument.vibrato_delay == 0.42
 
 
-def test_nes_tight_is_two_pulses_and_a_triangle():
-    """The real NES melodic roster. Its other channels are noise and DPCM,
-    which this roster has no voice for."""
+def test_nes_tight_is_three_pulses_and_a_triangle():
+    """Not the true NES roster (two pulses, one triangle) — an audition at
+    count = 3 found the arranger's overflow turns the lone middle voice into
+    an 819-step near-continuous arp on the minuet fixture, so the preset
+    falls back to count = 4 until the arranger can carry three voices
+    musically. Three pulses sound at once here, which no NES can do; see
+    the preset's header for the measured numbers."""
     result = load([], preset="nes-tight")
-    assert [v.role for v in result.voices] == ["lead", "counter", "bass"]
+    assert [v.role for v in result.voices] == ["lead", "counter", "inner_a", "bass"]
     waves = [v.instrument.wave for v in result.voices]
-    assert waves == ["pulse", "pulse", "triangle"]
+    assert waves == ["pulse", "pulse", "pulse", "triangle"]
 
 
-def test_nes_tight_carries_its_overflow_on_the_narrow_pulse():
+def test_nes_tight_carries_its_overflow_on_inner_a():
+    """At count = 4 the arp carrier is inner_a, the narrowest *surviving*
+    middle — not the narrowest pulse in absolute terms. The preset styles
+    inner_a's envelope and pan but does not set its duty, so it keeps the
+    roster default of 0.25 rather than counter's overridden 0.125."""
     result = load([], preset="nes-tight")
     by_role = {v.role: v for v in result.voices}
-    assert result.voices.arp == "counter"
-    assert by_role["counter"].instrument.duty == 0.125
+    assert result.voices.arp == "inner_a"
+    assert by_role["inner_a"].instrument.duty == 0.25
 
 
 def test_lush_widens_the_image_and_deepens_the_vibrato():

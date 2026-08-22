@@ -1,10 +1,20 @@
-# Close to the hardware: three channels, no echo, a mono image, shallow late
-# vibrato, and envelopes that decay rather than sit. Two pulses and a triangle
-# is the NES melodic roster; its remaining channels are noise and DPCM, which
-# this roster has no voice for.
+# Close to the hardware: no echo, a mono image, shallow late vibrato, and
+# envelopes that decay rather than sit. Four channels, not the NES's true
+# two-pulses-and-a-triangle melodic roster — three pulses sound at once here,
+# which no NES can do — but closer than the five-voice default.
+#
+# count = 3 would be the honest roster, but is not shippable yet: at three
+# voices there is only one middle voice, so `_pick_middle` can place at most
+# one note per onset and everything else overflows into `_arpeggiate`. On the
+# minuet fixture that turns 26 overflowed notes into 819 sixteen-millisecond
+# arp steps — 80.6% of the piece on the duty-0.125 narrow pulse, a
+# near-continuous trill rather than a musical line. An audition confirmed it
+# sounds harsh and wrong. Making count 3 musical is arranger work (spreading
+# overflow more gently, or a second arp carrier) that is its own later phase;
+# until then this preset uses count = 4.
 
 [voices]
-count = 3
+count = 4
 
 [echo]
 on = false
@@ -26,12 +36,13 @@ pan = 0.0
 volume_env = [15, 13, 11, 10]
 pan = 0.0
 
-# inner_a and inner_b are moot at count = 3 — truncation is a view, not a
-# deletion, so these stay addressable in case a later config layer raises
-# the count back up. Deleting them here means an inner voice that comes
-# back reappears un-styled: default envelope, default pan, half-mono image
-# from a preset whose whole point is mono. Keep them styled even though
-# they are silent at this preset's own count.
+# inner_a is active at count = 4 and carries the arp overflow (`.arp` is the
+# narrowest surviving middle) — its styling here is load-bearing, not moot.
+# inner_b stays styled even though it is silent at this preset's own count:
+# truncation is a view, not a deletion, so it stays addressable in case a
+# later config layer raises the count back to 5. Deleting it here means an
+# inner voice that comes back reappears un-styled: default envelope, default
+# pan, half-mono image from a preset whose whole point is mono.
 [voices.inner_a]
 volume_env = [11, 9, 8, 7, 7]
 pan = 0.0
