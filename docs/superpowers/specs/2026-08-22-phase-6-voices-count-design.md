@@ -61,7 +61,16 @@ that the cycle "carries the whole chord and not just the part that
 would otherwise have been lost."
 
 A floor of 3 keeps `middles` non-empty, so `.arp` always names a real
-channel. The invariant is structural, not a runtime check.
+channel.
+
+The bound is enforced in one place: the config validator, where every
+other range in `config.py` lives. `Roster` itself does not re-check it.
+The trade is deliberate — consistency with the rest of the module over a
+belt-and-braces guard — and its cost is that a hand-built
+`Roster(count=2)` is constructible and would fail on `.arp`. Nothing in
+the shipped path can build one, since `count` reaches a `Roster` only
+through the validator, but a test or a future caller could. `.arp`
+therefore fails loudly rather than returning something plausible.
 
 A two-voice lead-and-bass outline is Phase 1's walking skeleton. It is
 reachable by writing a roster, not by turning a supported dial.
@@ -82,9 +91,11 @@ class Roster:
 ```
 
 It exposes `.active`, `.lead`, `.bass`, `.middles`, and `.arp`, and
-iterates as its active voices. `.shrink(count)` is the setter — it
-returns a new `Roster` over the same voices with a different count, and
-is where the 3-5 bound is enforced.
+iterates as its active voices. There is no setter: config narrows a
+roster with `dataclasses.replace(roster, count=n)`, exactly as it
+already does for voices and instruments. A `.shrink()` method would have
+one caller and would duplicate a bound that the validator has to check
+anyway.
 
 **Truncation is a view, not a deletion.** The dropped voices stay in
 `.voices` and only `.active` narrows. This is what lets `count` merge
@@ -149,7 +160,8 @@ NES can do — a smaller overclaim, but still one.
 ## Testing
 
 - **`Roster`.** Drop order and `.arp` identity at 3, 4, and 5.
-  `.middles` never empty. `.shrink` outside 3–5 rejected.
+  `.middles` never empty across the legal range. `.arp` on an
+  out-of-range roster fails loudly rather than silently.
 - **Config.** `count` parsed; out-of-range and non-integer rejected with
   the range named; last-writer-wins across two files; an override of a
   dropped voice accepted and moot.
