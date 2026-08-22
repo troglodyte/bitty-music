@@ -18,20 +18,18 @@ from dataclasses import dataclass
 from itertools import groupby
 
 from bitty.arrangement import MAX_VELOCITY, Arrangement, Channel, Echo, Event
-from bitty.lfo import MIN_NOTE_SEC
+from bitty.config import DEFAULTS, Config, EchoSettings
 from bitty.model import Note, Score
 from bitty.voices import (
     ARP_ROLE,
     BASS_ROLE,
-    ECHO_BEATS,
-    ECHO_LEVEL,
     LEAD_ROLE,
     MIDDLE_ROLES,
-    ROSTER,
+    Voice,
 )
 
 EPSILON = 1e-6  # onset times are floats; anything closer than this is one moment
-ARP_STEP_SEC = 0.016  # the spec's [arp] rate_ms = 16
+ARP_STEP_SEC = DEFAULTS.arp.step_sec  # kept: tests and goldens read this name
 
 DOWNBEAT_STRENGTH = 1.0
 SECONDARY_STRENGTH = 0.5
@@ -52,13 +50,13 @@ class _Take:
 Tracks = dict[str, list[_Take]]
 
 
-def arrange(score: Score) -> Arrangement:
-    tracks, leftovers = _assign(score)
-    tracks[ARP_ROLE] = _arpeggiate(leftovers, tracks[ARP_ROLE])
+def arrange(score: Score, config: Config = DEFAULTS) -> Arrangement:
+    tracks, leftovers = _assign(score, config.voices)
+    tracks[ARP_ROLE] = _arpeggiate(leftovers, tracks[ARP_ROLE], config.arp.step_sec)
 
     channels: list[Channel] = []
-    for voice in ROSTER:
-        events = _events(tracks[voice.role])
+    for voice in config.voices:
+        events = _events(tracks[voice.role], config.vibrato.min_note_sec)
         if not events:
             continue  # a two-voice score should not carry three silent channels
         channels.append(
@@ -67,7 +65,7 @@ def arrange(score: Score) -> Arrangement:
                 instrument=voice.instrument,
                 events=events,
                 pan=voice.pan,
-                echo=_echo(score.bpm) if voice.role == LEAD_ROLE else None,
+                echo=_echo(score.bpm, config.echo) if voice.role == LEAD_ROLE else None,
             )
         )
 
@@ -78,12 +76,19 @@ def arrange(score: Score) -> Arrangement:
     return Arrangement(meta=meta, channels=tuple(channels))
 
 
-def _echo(bpm: float) -> Echo:
-    return Echo(delay_sec=ECHO_BEATS * 60.0 / bpm, level=ECHO_LEVEL)
+def _echo(bpm: float, settings: EchoSettings) -> Echo | None:
+    """None when echo is off, rather than an Echo at level zero.
+
+    A channel with a silent echo is not the same object as a channel with
+    none, and the arrangement is where that distinction is recorded.
+    """
+    if not settings.on:
+        return None
+    return Echo(delay_sec=settings.delay_beats * 60.0 / bpm, level=settings.level)
 
 
-def _assign(score: Score) -> tuple[Tracks, list[tuple[float, list[Note]]]]:
-    tracks: Tracks = {voice.role: [] for voice in ROSTER}
+def _assign(score: Score, roster: tuple[Voice, ...]) -> tuple[Tracks, list[tuple[float, list[Note]]]]:
+    tracks: Tracks = {voice.role: [] for voice in roster}
     leftovers: list[tuple[float, list[Note]]] = []
 
     for onset, group in _by_onset(score.notes):
@@ -149,10 +154,9 @@ def _texture(tracks: Tracks, onset: float, *, without: str) -> list[int]:
     chorale need only top the rest of the texture to keep the lead.
     """
     standing: list[int] = []
-    for voice in ROSTER:
-        takes = tracks[voice.role]
+    for role, takes in tracks.items():
         held = _sounding(takes, onset)
-        pitch = held if held is not None else (None if voice.role == without else _last_pitch(takes))
+        pitch = held if held is not None else (None if role == without else _last_pitch(takes))
         if pitch is not None:
             standing.append(pitch)
     return standing
@@ -192,7 +196,7 @@ def _distance(last_pitch: int | None, pitch: int) -> int:
     return 0 if last_pitch is None else abs(last_pitch - pitch)
 
 
-def _events(takes: list[_Take]) -> tuple[Event, ...]:
+def _events(takes: list[_Take], min_note_sec: float) -> tuple[Event, ...]:
     """Takes as contract events, flagging the ones long enough to waver.
 
     The flag is applied here rather than in `_place` because a take's duration
@@ -204,7 +208,7 @@ def _events(takes: list[_Take]) -> tuple[Event, ...]:
             pitch=take.pitch,
             dur=take.dur,
             vel=take.vel,
-            vibrato=take.dur >= MIN_NOTE_SEC,
+            vibrato=take.dur >= min_note_sec,
         )
         for take in takes
         if take.dur > EPSILON
@@ -231,7 +235,7 @@ def _accent(beat_strength: float) -> int:
 
 
 def _arpeggiate(
-    leftovers: list[tuple[float, list[Note]]], takes: list[_Take]
+    leftovers: list[tuple[float, list[Note]]], takes: list[_Take], step_sec: float
 ) -> list[_Take]:
     """Fold notes that found no channel into one fast-cycling line.
 
@@ -255,21 +259,23 @@ def _arpeggiate(
         vel = max(
             [_velocity(n) for n in notes] + [take.vel for take in absorbed]
         )
-        out.extend(_arp_cycle(onset, span, pitches, vel))
+        out.extend(_arp_cycle(onset, span, pitches, vel, step_sec))
 
     return _clip_overlaps(sorted(out, key=lambda take: take.t))
 
 
-def _arp_cycle(onset: float, span: float, pitches: list[int], vel: int) -> list[_Take]:
+def _arp_cycle(
+    onset: float, span: float, pitches: list[int], vel: int, step_sec: float
+) -> list[_Take]:
     # At least one step per pitch. A short dense chord — an ornament, or a
     # staccato stab — must still sound every note it was handed, even if the
     # cycle then runs slightly past where the chord ended.
-    steps = max(len(pitches), int(span / ARP_STEP_SEC))
+    steps = max(len(pitches), int(span / step_sec))
     return [
         _Take(
-            t=onset + step * ARP_STEP_SEC,
+            t=onset + step * step_sec,
             pitch=pitches[step % len(pitches)],
-            dur=ARP_STEP_SEC,
+            dur=step_sec,
             vel=vel,
         )
         for step in range(steps)
