@@ -337,3 +337,41 @@ def test_the_fixtures_pick_what_the_plan_measured():
         )
         assert chosen is not None, path.name
         assert (chosen.candidate.first_bar, chosen.candidate.last_bar, chosen.describe()) == expected
+
+
+def test_a_higher_min_bars_rejects_the_short_candidates():
+    score = ingest(MINUET)
+    sections = analyze(score)
+    assert loop.candidates(score, sections, min_bars=4)
+    assert not loop.candidates(score, sections, min_bars=999)
+
+
+def test_min_bars_defaults_to_the_configured_value():
+    score = ingest(MINUET)
+    sections = analyze(score)
+    assert loop.candidates(score, sections) == loop.candidates(
+        score, sections, min_bars=loop.MIN_LOOP_BARS
+    )
+
+
+def test_a_stricter_seam_ratio_refuses_a_candidate_a_looser_one_accepts():
+    score = ingest(MINUET)
+    arrangement = arrange(score)
+    audio = render(arrangement)
+    found = loop.candidates(score, analyze(score))
+    assert loop.choose(found, audio, arrangement, SAMPLE_RATE, seam_ratio=1000.0) is not None
+    assert loop.choose(found, audio, arrangement, SAMPLE_RATE, seam_ratio=0.0) is None
+
+
+def test_describe_reports_the_limit_it_was_judged_by():
+    choice = loop.Choice(
+        loop=Loop(start_sec=0.0, end_sec=1.0),
+        candidate=loop.LoopCandidate(
+            first_bar=1, last_bar=8, start=0.0, end=1.0, source="section"
+        ),
+        ratio=5.0,
+        severed=0,
+        echo_tails=0,
+        seam_ratio=2.0,
+    )
+    assert "over 2" in choice.describe()

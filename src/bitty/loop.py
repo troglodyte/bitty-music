@@ -17,13 +17,14 @@ from dataclasses import dataclass, replace
 import numpy as np
 
 from bitty.arrangement import Arrangement, Loop
+from bitty.config import DEFAULTS
 from bitty.model import Bar, Score
 
 # The module's tunables, gathered here rather than left where each task that
 # needed one happened to add it.
 EPSILON = 1e-6  # onset times are floats; matches arrange.EPSILON
-MIN_LOOP_BARS = 8  # the parent spec's [loop] min_bars, until Phase 5 brings config
-SEAM_RATIO = 1.0  # see the spec's calibration table: real candidates measure 0.02-0.38
+MIN_LOOP_BARS = DEFAULTS.loop.min_bars  # kept: the name callers and tests read
+SEAM_RATIO = DEFAULTS.loop.seam_ratio  # real candidates measure 0.02-0.38
 ORDINARY_PERCENTILE = 99.9
 
 SOURCE_WORDS = {
@@ -75,7 +76,9 @@ class LoopCandidate:
     source: str  # "repeat" | "section" | "manual"
 
 
-def candidates(score: Score, sections, loop_from: int | None = None) -> tuple[LoopCandidate, ...]:
+def candidates(
+    score: Score, sections, loop_from: int | None = None, min_bars: int = MIN_LOOP_BARS
+) -> tuple[LoopCandidate, ...]:
     """The cascade, cheapest and most trustworthy first.
 
     Manual selection overrides it entirely — the parent spec's rule — so
@@ -85,7 +88,7 @@ def candidates(score: Score, sections, loop_from: int | None = None) -> tuple[Lo
         return ()
     if loop_from is not None:
         return (_manual(score.bars, loop_from),)
-    return (*_from_repeats(score.bars), *_from_sections(sections))
+    return (*_from_repeats(score.bars, min_bars), *_from_sections(sections, min_bars))
 
 
 def _manual(bars: tuple[Bar, ...], first_bar: int) -> LoopCandidate:
@@ -101,7 +104,7 @@ def _manual(bars: tuple[Bar, ...], first_bar: int) -> LoopCandidate:
     )
 
 
-def _from_repeats(bars: tuple[Bar, ...]) -> list[LoopCandidate]:
+def _from_repeats(bars: tuple[Bar, ...], min_bars: int) -> list[LoopCandidate]:
     """The composer stating where the music comes back around.
 
     An end repeat with no preceding start repeats from bar one, which is both
@@ -142,11 +145,11 @@ def _from_repeats(bars: tuple[Bar, ...]) -> list[LoopCandidate]:
             source="repeat",
         )
         for first, last in pairs
-        if _length(first, last) >= MIN_LOOP_BARS
+        if _length(first, last) >= min_bars
     ]
 
 
-def _from_sections(sections) -> list[LoopCandidate]:
+def _from_sections(sections, min_bars: int) -> list[LoopCandidate]:
     """Section k through the *last* section, k ascending.
 
     Suffixes rather than arbitrary spans: a loop ending before the piece does
@@ -167,7 +170,7 @@ def _from_sections(sections) -> list[LoopCandidate]:
             source="section",
         )
         for first in sections
-        if last.last_bar - first.first_bar + 1 >= MIN_LOOP_BARS
+        if last.last_bar - first.first_bar + 1 >= min_bars
     ]
 
 
@@ -184,6 +187,7 @@ class Choice:
     ratio: float  # splice step over what this piece ordinarily steps
     severed: int  # dry notes cut by the splice
     echo_tails: int  # echo tails cut; reported, never rejected
+    seam_ratio: float = SEAM_RATIO  # the limit this verdict was judged by
 
     def describe(self) -> str:
         """Report every problem the seam check found, not just the first.
@@ -197,9 +201,9 @@ class Choice:
         parts = [SOURCE_WORDS.get(self.candidate.source, self.candidate.source)]
         if self.severed:
             parts.append(f"cuts {self.severed} note{'s' if self.severed != 1 else ''}")
-        if self.ratio > SEAM_RATIO:
-            parts.append(f"seam ratio {self.ratio:.2f}, over {SEAM_RATIO:g}")
-        if not self.severed and self.ratio <= SEAM_RATIO:
+        if self.ratio > self.seam_ratio:
+            parts.append(f"seam ratio {self.ratio:.2f}, over {self.seam_ratio:g}")
+        if not self.severed and self.ratio <= self.seam_ratio:
             parts.append("seam ok")
         if self.echo_tails:
             parts.append("echo tail cut")
@@ -211,6 +215,7 @@ def choose(
     audio: np.ndarray,
     arrangement: Arrangement,
     sample_rate: int,
+    seam_ratio: float = SEAM_RATIO,
 ) -> Choice | None:
     """The first candidate whose seam holds, or None.
 
@@ -222,9 +227,9 @@ def choose(
 
     ordinary = float(np.percentile(np.abs(np.diff(audio, axis=0)), ORDINARY_PERCENTILE))
     for candidate in candidates:
-        verdict = _measure(candidate, audio, arrangement, sample_rate, ordinary)
+        verdict = _measure(candidate, audio, arrangement, sample_rate, ordinary, seam_ratio)
         if candidate.source == "manual" or (
-            verdict.ratio <= SEAM_RATIO and not verdict.severed
+            verdict.ratio <= seam_ratio and not verdict.severed
         ):
             return verdict
     return None
@@ -236,6 +241,7 @@ def _measure(
     arrangement: Arrangement,
     sample_rate: int,
     ordinary: float,
+    seam_ratio: float,
 ) -> Choice:
     first = min(round(candidate.start * sample_rate), len(audio) - 1)
     last = min(round(candidate.end * sample_rate), len(audio))
@@ -247,6 +253,7 @@ def _measure(
         ratio=splice / ordinary if ordinary else 0.0,
         severed=severed,
         echo_tails=echo_tails,
+        seam_ratio=seam_ratio,
     )
 
 
