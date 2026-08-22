@@ -109,17 +109,26 @@ def test_a_repeat_span_under_the_floor_is_dropped():
     assert all(s[2] != "repeat" for s in spans(loop.candidates(score, analyze(score))))
 
 
-def test_a_bar_carrying_both_marks_closes_the_open_span_before_starting_a_new_one():
-    """`:||:` between two repeated sections must not swallow the first span.
+def test_a_one_bar_repeat_under_the_floor_yields_no_candidate():
+    """`|: bar :|` is the only mark pattern that puts both marks on one bar.
 
-    Bar 9 both ends the first repeat and opens the second. Closing before
-    opening yields two spans, (1, 9) and (9, 17); opening before closing would
-    overwrite bar 1's opening with bar 9's before it is ever paired, losing
-    the first span into a single spurious (1, 17).
+    `ingest.py` maps `starts_repeat` to a measure's left barline and
+    `ends_repeat` to its right one, so a `:||:` written *between* two
+    sections is always two bars — the first section's close on bar N's right
+    barline, the second's open on bar N+1's left one. It can never be one bar
+    carrying both marks.
+
+    Bar 12 here stands for a written `|: bar 12 :|`: a single measure whose
+    left barline starts a repeat and whose own right barline ends it,
+    self-contained. Opening before closing pairs it with itself, a one-bar
+    span that the 8-bar floor then drops — correctly, since the composer
+    never wrote a twelve-bar repeat. Closing before opening (the ordering
+    this test replaces) mistook bar 1 for the still-open start and produced
+    a spurious (1, 12) span the composer never marked, which is exactly the
+    regression this test guards against.
     """
-    score = synthetic(timeline(17, starts_repeat={1, 9}, ends_repeat={9, 17}))
-    repeats = [s for s in spans(loop.candidates(score, analyze(score))) if s[2] == "repeat"]
-    assert repeats == [(1, 9, "repeat"), (9, 17, "repeat")]
+    score = synthetic(timeline(16, starts_repeat={12}, ends_repeat={12}))
+    assert all(s[2] != "repeat" for s in spans(loop.candidates(score, analyze(score))))
 
 
 def test_sections_fall_through_as_suffixes_whole_piece_first():
@@ -288,6 +297,30 @@ def test_describe_names_the_source_and_the_seam():
     audio = pulse(2.0, hz=100.0)
     chosen = loop.choose((candidate(0.5, 1.5, source="repeat"),), audio, bare(), SAMPLE_RATE)
     assert chosen.describe() == "repeat marks, seam ok"
+
+
+def test_describe_reports_a_severed_note_and_an_over_threshold_ratio_together():
+    """A rejected manual loop must show every problem, not just the first one found.
+
+    `--loop-from` returns a candidate even when it fails both seam tests, and the
+    whole point of still printing the seam is that a person who typed a bad bar
+    number sees what's wrong with it. An if/elif between the two clauses would
+    hide the ratio whenever a note is also severed -- silent on exactly the
+    candidate that most needs to be loud about it.
+    """
+    c = loop.LoopCandidate(first_bar=1, last_bar=8, start=0.5, end=1.5, source="manual")
+    chosen = loop.Choice(loop=Loop(start_sec=0.5, end_sec=1.5), candidate=c, ratio=3.0, severed=1, echo_tails=0)
+    description = chosen.describe()
+    assert "cuts 1 note" in description
+    assert "seam ratio 3.00, over 1" in description
+
+
+def test_describe_pluralizes_the_cut_note_count():
+    c = loop.LoopCandidate(first_bar=1, last_bar=8, start=0.5, end=1.5, source="manual")
+    one = loop.Choice(loop=Loop(start_sec=0.5, end_sec=1.5), candidate=c, ratio=0.0, severed=1, echo_tails=0)
+    two = loop.Choice(loop=Loop(start_sec=0.5, end_sec=1.5), candidate=c, ratio=0.0, severed=2, echo_tails=0)
+    assert "cuts 1 note" in one.describe() and "cuts 1 notes" not in one.describe()
+    assert "cuts 2 notes" in two.describe()
 
 
 def test_the_fixtures_pick_what_the_plan_measured():

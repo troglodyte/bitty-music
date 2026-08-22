@@ -19,7 +19,18 @@ import numpy as np
 from bitty.arrangement import Arrangement, Loop
 from bitty.model import Bar, Score
 
+# The module's tunables, gathered here rather than left where each task that
+# needed one happened to add it.
 EPSILON = 1e-6  # onset times are floats; matches arrange.EPSILON
+MIN_LOOP_BARS = 8  # the parent spec's [loop] min_bars, until Phase 5 brings config
+SEAM_RATIO = 1.0  # see the spec's calibration table: real candidates measure 0.02-0.38
+ORDINARY_PERCENTILE = 99.9
+
+SOURCE_WORDS = {
+    "repeat": "repeat marks",
+    "section": "section boundaries",
+    "manual": "manual",
+}
 
 
 def trim(score: Score, first_bar: int, last_bar: int) -> Score:
@@ -47,9 +58,6 @@ def trim(score: Score, first_bar: int, last_bar: int) -> Score:
         ),
         bars=tuple(replace(bar, start=bar.start - offset) for bar in kept),
     )
-
-
-MIN_LOOP_BARS = 8  # the parent spec's [loop] min_bars, until Phase 5 brings config
 
 
 @dataclass(frozen=True)
@@ -103,20 +111,24 @@ def _from_repeats(bars: tuple[Bar, ...]) -> list[LoopCandidate]:
     does — closes at the last bar rather than vanishing. Longest first: a
     loop wants the substantial repeated body, not an incidental four-bar echo.
 
-    A bar can carry both marks at once — `:||:` between two repeated
-    sections — so closing has to happen before opening. Otherwise the new
-    `opening` overwrites the old one before it is ever paired, and the span
-    that should have ended there silently swallows everything back to its own
-    start (or bar one) instead.
+    Opening has to happen before closing, not after. `ingest.py` maps
+    `starts_repeat` to a measure's *left* barline and `ends_repeat` to its
+    *right* one, so a `:||:` written between two sections is never one bar
+    carrying both marks — it is always two: the first section's close on bar
+    N's right barline, the second's open on bar N+1's left one. The only bar
+    that ever carries both marks at once is a genuine one-bar repeat, `|: bar
+    :|`, where opening-then-closing on the same bar is exactly what pairs it
+    with itself rather than leaving it open to swallow every bar that
+    follows.
     """
     pairs: list[tuple[Bar, Bar]] = []
     opening: Bar | None = None
     for bar in bars:
+        if bar.starts_repeat:
+            opening = bar
         if bar.ends_repeat:
             pairs.append((opening or bars[0], bar))
             opening = None
-        if bar.starts_repeat:
-            opening = bar
     if opening is not None:
         pairs.append((opening, bars[-1]))
 
@@ -163,16 +175,6 @@ def _length(first: Bar, last: Bar) -> int:
     return last.number - first.number + 1
 
 
-SEAM_RATIO = 1.0  # see the spec's calibration table: real candidates measure 0.02-0.38
-ORDINARY_PERCENTILE = 99.9
-
-SOURCE_WORDS = {
-    "repeat": "repeat marks",
-    "section": "section boundaries",
-    "manual": "manual",
-}
-
-
 @dataclass(frozen=True)
 class Choice:
     """The picked loop and the evidence for it, so the tool can say why."""
@@ -184,12 +186,20 @@ class Choice:
     echo_tails: int  # echo tails cut; reported, never rejected
 
     def describe(self) -> str:
+        """Report every problem the seam check found, not just the first.
+
+        A manual loop can both sever a note and blow the ratio at once — the
+        whole point of `--loop-from` accepting a rejected candidate is that
+        the person typing the bar number gets told what's wrong with it, not
+        just one of the two things. So these are independent clauses, not a
+        severed/ratio if-elif: a candidate can report both.
+        """
         parts = [SOURCE_WORDS.get(self.candidate.source, self.candidate.source)]
         if self.severed:
-            parts.append(f"cuts {self.severed} notes")
-        elif self.ratio > SEAM_RATIO:
+            parts.append(f"cuts {self.severed} note{'s' if self.severed != 1 else ''}")
+        if self.ratio > SEAM_RATIO:
             parts.append(f"seam ratio {self.ratio:.2f}, over {SEAM_RATIO:g}")
-        else:
+        if not self.severed and self.ratio <= SEAM_RATIO:
             parts.append("seam ok")
         if self.echo_tails:
             parts.append("echo tail cut")
