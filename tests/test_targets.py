@@ -218,6 +218,7 @@ def test_a_loop_starting_at_zero_writes_no_intro(tmp_path):
 
     assert not (tmp_path / "piece_intro.ogg").exists()
     assert (tmp_path / "piece_loop.ogg") in written
+    assert "intro:" not in (tmp_path / "piece.bevy.ron").read_text()
 
 
 def test_bevy_without_a_loop_emits_a_one_shot(tmp_path):
@@ -250,3 +251,53 @@ def test_the_bevy_fragment_names_wav_files_when_asked(tmp_path):
     text = (tmp_path / "piece.bevy.ron").read_text()
     assert 'intro: "piece_intro.wav",' in text
     assert 'loop_: "piece_loop.wav",' in text
+
+
+def test_kira_writes_one_whole_file(tmp_path):
+    written = targets.TARGETS["bevy-kira"](a_render(loop=(1.0, 2.0), seconds=3.0), tmp_path, "piece", audio_format="wav")
+
+    assert (tmp_path / "piece.wav") in written
+    audio, _ = sf.read(tmp_path / "piece.wav")
+    assert abs(len(audio) / 44100 - 3.0) < 0.01
+
+
+def test_kira_records_the_loop_in_seconds_not_samples(tmp_path):
+    """Kira's loop regions are time-based. This is the one target that keeps seconds."""
+    targets.TARGETS["bevy-kira"](a_render(loop=(1.0, 2.0)), tmp_path, "piece")
+
+    text = (tmp_path / "piece.bevy-kira.ron").read_text()
+    assert "loop_start: 1.0," in text
+    assert "loop_end: 2.0," in text
+
+
+def test_kira_omits_the_loop_keys_when_there_is_no_loop(tmp_path):
+    targets.TARGETS["bevy-kira"](a_render(loop=None), tmp_path, "piece")
+
+    text = (tmp_path / "piece.bevy-kira.ron").read_text()
+    assert "loop_start" not in text
+    assert 'file: "piece.ogg",' in text
+
+
+@pytest.mark.parametrize("target", sorted(targets.TARGETS))
+def test_every_target_emits_the_files_it_claims(tmp_path, target):
+    """The test that catches a new target wired in wrong."""
+    written = targets.TARGETS[target](a_render(), tmp_path, "piece")
+
+    assert written, f"{target} emitted nothing"
+    for path in written:
+        assert path.exists(), f"{target} named {path} but did not write it"
+
+
+@pytest.mark.parametrize("target", sorted(targets.TARGETS))
+def test_every_target_survives_an_empty_meta(tmp_path, target):
+    """bitty render accepts hand-edited arrangements missing any key."""
+    written = targets.TARGETS[target](a_render(meta={}), tmp_path, "piece")
+
+    assert all(path.exists() for path in written)
+
+
+@pytest.mark.parametrize("target", sorted(targets.TARGETS))
+def test_every_target_survives_having_no_loop(tmp_path, target):
+    written = targets.TARGETS[target](a_render(loop=None), tmp_path, "piece")
+
+    assert all(path.exists() for path in written)

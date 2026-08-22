@@ -165,7 +165,30 @@ def _emit_bevy(
     return written
 
 
+def _emit_bevy_kira(
+    render: Render, out_dir: Path, name: str, *, audio_format: str = "ogg"
+) -> list[Path]:
+    """One whole file plus offsets, because kira has real loop regions.
+
+    Kira takes seconds, so this is the only target where the offsets do not
+    become samples.
+    """
+    path = write_audio(render.audio, out_dir, name, audio_format)
+    fields = [
+        ("title", _ron_str(_title(render, name))),
+        ("file", _ron_str(path.name)),
+    ]
+    if render.loop_start_sample is not None:
+        rate = render.sample_rate
+        fields.append(("loop_start", repr(round(render.loop_start_sample / rate, 6))))
+        fields.append(("loop_end", repr(round(render.loop_end_sample / rate, 6))))
+
+    fields += _common_fields(render)
+    return [path, _write_fragment(out_dir, name, "bevy-kira", _entry(name, fields))]
+
+
 TARGETS: dict[str, Emitter] = {
     "bevy": _emit_bevy,
+    "bevy-kira": _emit_bevy_kira,
     "generic": _emit_generic,
 }
