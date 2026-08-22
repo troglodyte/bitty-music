@@ -270,11 +270,21 @@ def test_a_per_piece_file_belongs_to_its_own_piece_only(tmp_path):
 
 
 def test_an_explicit_config_beats_everything_discovered(tmp_path):
-    (tmp_path / "bitty.toml").write_text("[echo]\nlevel = 0.1\n")
-    (tmp_path / "minuet.bitty.toml").write_text("[echo]\nlevel = 0.2\n")
+    """Explicit is appended to the discovered layers, not substituted for them.
+
+    Each layer sets a field the others leave alone, so an implementation that
+    replaced the discovered paths would lose the first two. All three also set
+    echo.level, so the contested key proves the explicit file goes last.
+    """
+    (tmp_path / "bitty.toml").write_text("[echo]\nlevel = 0.1\n\n[loop]\nmin_bars = 3\n")
+    (tmp_path / "minuet.bitty.toml").write_text("[echo]\nlevel = 0.2\n\n[arp]\nrate_ms = 20\n")
     explicit = tmp_path / "elsewhere.toml"
     explicit.write_text("[echo]\nlevel = 0.9\n")
-    assert resolve(tmp_path, "minuet", explicit=explicit).echo.level == 0.9
+
+    result = resolve(tmp_path, "minuet", explicit=explicit)
+    assert result.echo.level == 0.9, "the explicit file wins the contested key"
+    assert result.loop.min_bars == 3, "the project file still applied"
+    assert result.arp.step_sec == 0.02, "the per-piece file still applied"
 
 
 def test_a_discovered_file_beats_the_preset(tmp_path):
