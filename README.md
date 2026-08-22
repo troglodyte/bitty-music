@@ -186,7 +186,7 @@ a passage should not mean navigating a tree.
 
 ```json
 {
-  "meta": { "title": "chorale", "bpm": 120.0 },
+  "meta": { "title": "chorale", "bpm": 120.0, "bars": [1, 8] },
   "channels": [
     {
       "role": "lead",
@@ -205,7 +205,8 @@ a passage should not mean navigating a tree.
         { "t": 0.0, "pitch": 69, "dur": 0.5, "vel": 10, "vibrato": true }
       ]
     }
-  ]
+  ],
+  "loop": { "start_sec": 0.0, "end_sec": 12.0 }
 }
 ```
 

@@ -348,11 +348,30 @@ candidate the cascade generates on all three fixtures.
 | Bar-aligned candidates (all fixtures, every tier) | 0.02 – 0.38 |
 | Arbitrary splice points, 400 random pairs per fixture | median 0.54–0.80, p90 1.07–1.67, max 2.97 |
 | Fraction of arbitrary splices above 1.0 | 15% – 40% |
+| Fraction of arbitrary splices *below* 1.0, i.e. accepted by Test 1 | 62% – 86% |
 
 **`SEAM_RATIO = 1.0`** — roughly 2.6× headroom above the worst real
 candidate, while still rejecting a large share of arbitrary joins. Per
 fixture, `ordinary` (the 99.9th-percentile adjacent-sample step) is
 chorale 0.266, minuet 0.420, ragtime 0.455.
+
+That headroom cuts the other way, too. At `SEAM_RATIO = 1.0`, Test 1 waves
+through 62–86% of arbitrary splice points on these fixtures — most of an
+arbitrary join passes the click check. In practice this means Test 1 will
+rarely be the thing that rejects a real candidate; Test 2 (severed dry
+notes) is carrying the seam check. The 0.02–0.38 range above establishes
+that 1.0 is *safe* — no bar-aligned candidate on any fixture comes close to
+tripping it — not that it is *sensitive*. Both are true statements about
+the same number, and only the first was measured when this threshold was
+chosen.
+
+That does not make 1.0 wrong: on three fixtures, conservative is the
+defensible choice, and a wrong acceptance is worse than a wrong rejection
+here — `--loop-from` recovers a rejected candidate, but nothing catches a
+bad splice that ships. But it means `SEAM_RATIO` is the first constant to
+re-tune once Phase 5 gives it a config home and more pieces exercise it;
+tightening it toward the arbitrary-splice median would make Test 1 do more
+of the work it currently only theoretically does.
 
 Dry-note crossings on bar-aligned candidates: **zero**, on every fixture,
 at every tier. Test 2 guards without misfiring.
