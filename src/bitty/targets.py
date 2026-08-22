@@ -15,24 +15,28 @@ import numpy as np
 import soundfile as sf
 import typer
 
-from bitty.synth import Render
+from bitty.synth import SAMPLE_RATE, Render
 
 Emitter = Callable[..., list[Path]]
 
 
 def write_audio(
-    audio: np.ndarray, out_dir: Path, stem: str, audio_format: str = "ogg"
+    audio: np.ndarray,
+    out_dir: Path,
+    stem: str,
+    audio_format: str = "ogg",
+    sample_rate: int = SAMPLE_RATE,
 ) -> Path:
     """Write a buffer and report it. Moved here from cli, echo intact."""
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{stem}.{audio_format}"
 
     if audio_format == "wav":
-        sf.write(path, audio, 44100)
+        sf.write(path, audio, sample_rate)
     else:
-        sf.write(path, audio, 44100, format="OGG", subtype="VORBIS")
+        sf.write(path, audio, sample_rate, format="OGG", subtype="VORBIS")
 
-    typer.echo(f"{path}  ({len(audio) / 44100:.1f}s)")
+    typer.echo(f"{path}  ({len(audio) / sample_rate:.1f}s)")
     return path
 
 
@@ -117,7 +121,7 @@ def _emit_generic(
     Godot both read. libsndfile writes only a fixed set of Vorbis fields, so
     the custom keys need mutagen.
     """
-    path = write_audio(render.audio, out_dir, name, audio_format)
+    path = write_audio(render.audio, out_dir, name, audio_format, sample_rate=render.sample_rate)
 
     if render.loop_start_sample is None:
         return [path]
@@ -147,19 +151,19 @@ def _emit_bevy(
     fields = [("title", _ron_str(_title(render, name)))]
 
     if render.loop_start_sample is None:
-        written.append(write_audio(render.audio, out_dir, name, audio_format))
+        written.append(write_audio(render.audio, out_dir, name, audio_format, sample_rate=render.sample_rate))
         fields.append(("full", _ron_str(f"{name}.{audio_format}")))
     else:
         start, end = render.loop_start_sample, render.loop_end_sample
         if start > 0:
             written.append(
-                write_audio(render.audio[:start], out_dir, f"{name}_intro", audio_format)
+                write_audio(render.audio[:start], out_dir, f"{name}_intro", audio_format, sample_rate=render.sample_rate)
             )
             fields.append(("intro", _ron_str(f"{name}_intro.{audio_format}")))
         else:
             typer.echo("  loop starts at 0:00 — no intro to write")
         written.append(
-            write_audio(render.audio[start:end], out_dir, f"{name}_loop", audio_format)
+            write_audio(render.audio[start:end], out_dir, f"{name}_loop", audio_format, sample_rate=render.sample_rate)
         )
         fields.append(("loop_", _ron_str(f"{name}_loop.{audio_format}")))
 
@@ -176,7 +180,7 @@ def _emit_bevy_kira(
     Kira takes seconds, so this is the only target where the offsets do not
     become samples.
     """
-    path = write_audio(render.audio, out_dir, name, audio_format)
+    path = write_audio(render.audio, out_dir, name, audio_format, sample_rate=render.sample_rate)
     fields = [
         ("title", _ron_str(_title(render, name))),
         ("file", _ron_str(path.name)),

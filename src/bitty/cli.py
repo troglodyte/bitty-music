@@ -2,34 +2,76 @@
 
 from dataclasses import replace
 from pathlib import Path
+from typing import Optional
 
 import typer
 
+from bitty import config as config_module
 from bitty import loop as loop_stage
 from bitty import targets
 from bitty.analyze import analyze
 from bitty.arrange import arrange
 from bitty.arrangement import Arrangement
+from bitty.config import Config
 from bitty.ingest import ingest
-from bitty.synth import SAMPLE_RATE, Render
+from bitty.synth import Render
 from bitty.synth import render as render_audio
 
 app = typer.Typer(help="Turn classical scores into chiptune audio.")
 
 ARRANGEMENT_SUFFIX = ".arrangement.json"
-DEFAULT_TARGET = "bevy"
 TARGET_HELP = f"{', '.join(sorted(targets.TARGETS))}."
+PRESET_HELP = f"{', '.join(config_module.preset_names())}."
 
 
-def _emit(
-    arrangement: Arrangement, audio, out_dir: Path, stem: str, target: str, wav: bool
-) -> None:
-    """One path for every write. Targets own the file layout; the CLI owns the flags."""
-    render = Render.of(arrangement, audio)
-    targets.TARGETS[target](
-        render, out_dir, stem, audio_format="wav" if wav else "ogg"
+def _settings(
+    directory: Path,
+    stem: str,
+    preset: str | None,
+    explicit: Path | None,
+    out_dir: Path | None,
+    wav: bool | None,
+    target: str | None,
+) -> Config:
+    """Files first, then flags.
+
+    Every config-backed flag defaults to None, which is how the CLI tells "not
+    given" from "given the value that happens to be the default". Without that
+    a config file could never set a value a flag also names.
+    """
+    _check_preset(preset)
+    try:
+        resolved = config_module.resolve(directory, stem, preset=preset, explicit=explicit)
+    except config_module.ConfigError as error:
+        raise typer.BadParameter(str(error), param_hint="--config") from error
+
+    output = resolved.output
+    if out_dir is not None:
+        output = replace(output, dir=out_dir)
+    if wav is not None:
+        output = replace(output, format="wav" if wav else "ogg")
+    if target is not None:
+        output = replace(output, target=target)
+
+    _check_target(output.target)
+    return replace(resolved, output=output)
+
+
+def _check_preset(name: str | None) -> None:
+    if name is not None and name not in config_module.preset_names():
+        raise typer.BadParameter(
+            f"unknown preset {name!r}; try one of {', '.join(config_module.preset_names())}",
+            param_hint="--preset",
+        )
+
+
+def _emit(arrangement: Arrangement, audio, stem: str, settings: Config) -> None:
+    """One path for every write. Targets own the file layout; config owns the flags."""
+    render = Render.of(arrangement, audio, settings.output.sample_rate)
+    targets.TARGETS[settings.output.target](
+        render, settings.output.dir, stem, audio_format=settings.output.format
     )
-    targets.assemble(out_dir, target)
+    targets.assemble(settings.output.dir, settings.output.target)
 
 
 def _check_target(target: str) -> None:
@@ -49,8 +91,14 @@ def main() -> None:
 @app.command()
 def sections(
     score: Path = typer.Argument(..., exists=True, dir_okay=False, readable=True),
+    preset: Optional[str] = typer.Option(None, "--preset", help=PRESET_HELP),
+    config_path: Optional[Path] = typer.Option(
+        None, "--config", exists=True, dir_okay=False, readable=True
+    ),
 ) -> None:
     """Print the structure the score's own marks describe."""
+    settings = _settings(score.parent, score.stem, preset, config_path, None, None, None)
+
     parsed = ingest(score)
     found = analyze(parsed)
     total = found[-1].end if found else 0.0
@@ -69,12 +117,13 @@ def sections(
             f"{'   repeat' if section.repeats else ''}"
         )
 
-    arrangement = arrange(parsed)
+    arrangement = arrange(parsed, settings)
     chosen = loop_stage.choose(
-        loop_stage.candidates(parsed, found),
-        render_audio(arrangement),
+        loop_stage.candidates(parsed, found, min_bars=settings.loop.min_bars),
+        render_audio(arrangement, settings.output.sample_rate),
         arrangement,
-        SAMPLE_RATE,
+        settings.output.sample_rate,
+        seam_ratio=settings.loop.seam_ratio,
     )
     typer.echo("")
     if chosen is None:
@@ -93,16 +142,25 @@ def _clock(seconds: float) -> str:
 @app.command()
 def convert(
     score: Path = typer.Argument(..., exists=True, dir_okay=False, readable=True),
-    out_dir: Path = typer.Option(Path("out"), "-o", "--out-dir"),
-    wav: bool = typer.Option(False, "--wav", help="Write uncompressed WAV instead of Ogg."),
+    out_dir: Optional[Path] = typer.Option(None, "-o", "--out-dir"),
+    wav: Optional[bool] = typer.Option(
+        None, "--wav/--ogg", help="Write uncompressed WAV instead of Ogg."
+    ),
     bars: str = typer.Option(None, "--bars", help="Printed bar range to keep, e.g. 9-16."),
     loop_from: int = typer.Option(
         None, "--loop-from", help="Printed bar the loop starts at. Overrides the cascade."
     ),
-    target: str = typer.Option(DEFAULT_TARGET, "--target", help=TARGET_HELP),
+    target: Optional[str] = typer.Option(None, "--target", help=TARGET_HELP),
+    preset: Optional[str] = typer.Option(None, "--preset", help=PRESET_HELP),
+    config_path: Optional[Path] = typer.Option(
+        None, "--config", exists=True, dir_okay=False, readable=True
+    ),
 ) -> None:
     """Convert a score to audio and its arrangement JSON."""
-    _check_target(target)
+    settings = _settings(
+        score.parent, score.stem, preset, config_path, out_dir, wav, target
+    )
+
     parsed = ingest(score)
     if bars:
         first, last = _bar_range(bars)
@@ -112,19 +170,27 @@ def convert(
             raise typer.BadParameter(str(error), param_hint="--bars") from error
 
     try:
-        candidates = loop_stage.candidates(parsed, analyze(parsed), loop_from)
+        candidates = loop_stage.candidates(
+            parsed, analyze(parsed), loop_from, min_bars=settings.loop.min_bars
+        )
     except ValueError as error:
         raise typer.BadParameter(str(error), param_hint="--loop-from") from error
 
-    arrangement = arrange(parsed)
-    audio = render_audio(arrangement)
-    chosen = loop_stage.choose(candidates, audio, arrangement, SAMPLE_RATE)
+    arrangement = arrange(parsed, settings)
+    audio = render_audio(arrangement, settings.output.sample_rate)
+    chosen = loop_stage.choose(
+        candidates,
+        audio,
+        arrangement,
+        settings.output.sample_rate,
+        seam_ratio=settings.loop.seam_ratio,
+    )
     arrangement = replace(arrangement, loop=chosen.loop if chosen else None)
 
     _report(chosen)
-    _emit(arrangement, audio, out_dir, score.stem, target, wav)
+    _emit(arrangement, audio, score.stem, settings)
 
-    json_path = out_dir / f"{score.stem}{ARRANGEMENT_SUFFIX}"
+    json_path = settings.output.dir / f"{score.stem}{ARRANGEMENT_SUFFIX}"
     json_path.write_text(arrangement.to_json())
     typer.echo(f"{json_path}")
 
@@ -152,15 +218,28 @@ def _report(chosen) -> None:
 @app.command()
 def render(
     arrangement: Path = typer.Argument(..., exists=True, dir_okay=False, readable=True),
-    out_dir: Path = typer.Option(Path("out"), "-o", "--out-dir"),
-    wav: bool = typer.Option(False, "--wav", help="Write uncompressed WAV instead of Ogg."),
-    target: str = typer.Option(DEFAULT_TARGET, "--target", help=TARGET_HELP),
+    out_dir: Optional[Path] = typer.Option(None, "-o", "--out-dir"),
+    wav: Optional[bool] = typer.Option(
+        None, "--wav/--ogg", help="Write uncompressed WAV instead of Ogg."
+    ),
+    target: Optional[str] = typer.Option(None, "--target", help=TARGET_HELP),
+    preset: Optional[str] = typer.Option(None, "--preset", help=PRESET_HELP),
+    config_path: Optional[Path] = typer.Option(
+        None, "--config", exists=True, dir_okay=False, readable=True
+    ),
 ) -> None:
-    """Re-render a hand-edited arrangement, skipping analysis entirely."""
-    _check_target(target)
+    """Re-render a hand-edited arrangement, skipping analysis entirely.
+
+    Only the [output] half of the config can matter here: everything musical
+    was decided when the JSON was written, and this command obeys the file.
+    """
+    stem = _stem(arrangement)
+    settings = _settings(
+        arrangement.parent, stem, preset, config_path, out_dir, wav, target
+    )
     loaded = Arrangement.from_json(arrangement.read_text())
-    audio = render_audio(loaded)
-    _emit(loaded, audio, out_dir, _stem(arrangement), target, wav)
+    audio = render_audio(loaded, settings.output.sample_rate)
+    _emit(loaded, audio, stem, settings)
 
 
 def _stem(path: Path) -> str:

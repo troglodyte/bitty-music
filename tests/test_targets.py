@@ -1,5 +1,7 @@
 """Targets: a Render in, engine artifacts out."""
 
+from dataclasses import replace
+
 import numpy as np
 import pytest
 import soundfile as sf
@@ -315,3 +317,17 @@ def test_every_target_survives_having_no_loop(tmp_path, target):
     written = targets.TARGETS[target](a_render(loop=None), tmp_path, "piece")
 
     assert all(path.exists() for path in written)
+
+
+def test_write_audio_honours_the_sample_rate_it_is_given(tmp_path):
+    path = targets.write_audio(a_render().audio, tmp_path, "piece", "wav", sample_rate=22050)
+    _, rate = sf.read(path)
+    assert rate == 22050
+
+
+def test_an_emitter_writes_at_the_render_s_own_rate(tmp_path):
+    """The 5a gap: the manifest said one rate and the file was written at another."""
+    render = replace(a_render(), sample_rate=22050)
+    targets.TARGETS["generic"](render, tmp_path, "piece", audio_format="wav")
+    _, rate = sf.read(tmp_path / "piece.wav")
+    assert rate == 22050

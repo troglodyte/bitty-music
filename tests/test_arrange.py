@@ -1,9 +1,11 @@
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
 from bitty import voices
 from bitty.arrange import _velocity, arrange
+from bitty.config import DEFAULTS
 from bitty.ingest import ingest
 from bitty.model import Note, Score
 
@@ -336,3 +338,50 @@ def test_a_note_truncated_below_the_threshold_loses_its_vibrato():
     assert lead[0].dur == pytest.approx(0.1)
     assert not lead[0].vibrato, "a note cut to 100 ms must not claim a 2-second vibrato"
     assert lead[1].vibrato
+
+
+def test_echo_off_leaves_the_lead_with_no_echo_object():
+    """Not a silent echo — none. The arrangement should say which it is."""
+    score = ingest(FIXTURE)
+    settings = replace(DEFAULTS, echo=replace(DEFAULTS.echo, on=False))
+    for channel in arrange(score, settings).channels:
+        assert channel.echo is None
+
+
+def test_the_echo_level_and_delay_come_from_config():
+    score = ingest(FIXTURE)
+    settings = replace(DEFAULTS, echo=replace(DEFAULTS.echo, level=0.6, delay_beats=1.5))
+    lead = next(c for c in arrange(score, settings).channels if c.echo is not None)
+    assert lead.echo.level == 0.6
+    assert lead.echo.delay_sec == 1.5 * 60.0 / score.bpm
+
+
+def test_a_reshaped_voice_reaches_the_channel_it_names():
+    score = ingest(FIXTURE)
+    roster = tuple(
+        replace(v, instrument=replace(v.instrument, duty=0.125)) if v.role == "lead" else v
+        for v in DEFAULTS.voices
+    )
+    lead = next(c for c in arrange(score, replace(DEFAULTS, voices=roster)).channels if c.role == "lead")
+    assert lead.instrument.duty == 0.125
+
+
+def test_the_vibrato_threshold_decides_which_notes_get_it():
+    score = ingest(FIXTURE)
+    never = replace(DEFAULTS, vibrato=replace(DEFAULTS.vibrato, min_note_sec=999.0))
+    always = replace(DEFAULTS, vibrato=replace(DEFAULTS.vibrato, min_note_sec=0.0))
+    assert not any(e.vibrato for c in arrange(score, never).channels for e in c.events)
+    assert all(e.vibrato for c in arrange(score, always).channels for e in c.events)
+
+
+def test_the_arpeggio_step_comes_from_config():
+    score = ingest(Path(__file__).parent / "fixtures" / "ragtime.mxl")
+    settings = replace(DEFAULTS, arp=replace(DEFAULTS.arp, step_sec=0.032))
+    events = [e for c in arrange(score, settings).channels if c.role == "inner_b" for e in c.events]
+    assert any(abs(e.dur - 0.032) < 1e-9 for e in events)
+    assert not any(abs(e.dur - 0.016) < 1e-9 for e in events)
+
+
+def test_the_default_argument_still_arranges():
+    score = ingest(FIXTURE)
+    assert arrange(score) == arrange(score, DEFAULTS)

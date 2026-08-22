@@ -144,7 +144,14 @@ def _add_event(
     if event.vibrato:
         # Composed with the pitch envelope, not replacing it: the blip is the
         # attack, the vibrato is the sustain.
-        inc = inc * 2.0 ** (vibrato_cents(length, sample_rate) / 1200.0)
+        cents = vibrato_cents(
+            length,
+            sample_rate,
+            instrument.vibrato_cents,
+            instrument.vibrato_delay,
+            instrument.vibrato_rate_hz,
+        )
+        inc = inc * 2.0 ** (cents / 1200.0)
 
     phase = np.concatenate(([0.0], np.cumsum(inc)[:-1]))
     wave = oscillator(instrument.wave)(phase, inc, instrument)

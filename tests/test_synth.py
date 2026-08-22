@@ -250,3 +250,27 @@ def test_a_half_specified_loop_is_rejected_at_construction():
 
     with pytest.raises(ValueError):
         Render(audio=audio, sample_rate=44100, meta={}, loop_end_sample=10)
+
+
+def test_instrument_vibrato_depth_reaches_the_rendered_audio():
+    """The shape travels in the arrangement, so two depths must not render alike."""
+
+    def rendered(cents):
+        instrument = Instrument(wave="pulse", vibrato_cents=cents)
+        event = Event(t=0.0, pitch=69, dur=1.5, vel=15, vibrato=True)
+        channel = Channel(role="lead", instrument=instrument, events=(event,))
+        return render(Arrangement(meta={}, channels=(channel,)))
+
+    assert not np.array_equal(rendered(25.0), rendered(80.0))
+
+
+def test_an_instrument_without_vibrato_events_ignores_its_vibrato_fields():
+    """`Event.vibrato` is still the switch; the instrument only shapes it."""
+
+    def rendered(cents):
+        instrument = Instrument(wave="pulse", vibrato_cents=cents)
+        event = Event(t=0.0, pitch=69, dur=1.5, vel=15, vibrato=False)
+        channel = Channel(role="lead", instrument=instrument, events=(event,))
+        return render(Arrangement(meta={}, channels=(channel,)))
+
+    assert np.array_equal(rendered(25.0), rendered(80.0))

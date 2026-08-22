@@ -29,7 +29,10 @@
         ],
         "cutoff_hz": null,
         "resonance": 0.7071,
-        "quantize": null
+        "quantize": null,
+        "vibrato_cents": 25.0,
+        "vibrato_delay": 0.3,
+        "vibrato_rate_hz": 5.5
       },
       "events": [
         {
@@ -270,7 +273,10 @@
         ],
         "cutoff_hz": null,
         "resonance": 0.7071,
-        "quantize": null
+        "quantize": null,
+        "vibrato_cents": 25.0,
+        "vibrato_delay": 0.3,
+        "vibrato_rate_hz": 5.5
       },
       "events": [
         {
@@ -474,7 +480,10 @@
         "pitch_env": [],
         "cutoff_hz": null,
         "resonance": 0.7071,
-        "quantize": null
+        "quantize": null,
+        "vibrato_cents": 25.0,
+        "vibrato_delay": 0.3,
+        "vibrato_rate_hz": 5.5
       },
       "events": [
         {
@@ -720,7 +729,10 @@
         "pitch_env": [],
         "cutoff_hz": null,
         "resonance": 0.7071,
-        "quantize": null
+        "quantize": null,
+        "vibrato_cents": 25.0,
+        "vibrato_delay": 0.3,
+        "vibrato_rate_hz": 5.5
       },
       "events": [
         {
@@ -902,7 +914,10 @@
         "pitch_env": [],
         "cutoff_hz": null,
         "resonance": 0.7071,
-        "quantize": 16
+        "quantize": 16,
+        "vibrato_cents": 25.0,
+        "vibrato_delay": 0.3,
+        "vibrato_rate_hz": 5.5
       },
       "events": [
         {

@@ -1,4 +1,5 @@
 import json
+import shutil
 from pathlib import Path
 
 import numpy as np
@@ -275,3 +276,136 @@ def test_the_printed_pick_is_the_one_convert_would_write(tmp_path):
 def test_sections_says_so_when_nothing_can_loop():
     result = runner.invoke(app, ["sections", str(FIXTURE)])
     assert "no loop" in result.output.lower()
+
+
+def scored(tmp_path, name="two_part"):
+    """Copy a fixture somewhere writable so config files can sit beside it."""
+    target = tmp_path / f"{name}.musicxml"
+    shutil.copy(FIXTURE, target)
+    return target
+
+
+def test_a_config_file_beside_the_score_changes_the_output_format(tmp_path):
+    score = scored(tmp_path)
+    (tmp_path / "bitty.toml").write_text('[output]\nformat = "wav"\n')
+    result = runner.invoke(app, ["convert", str(score), "-o", str(tmp_path / "out")])
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / "out" / "two_part.wav").exists()
+
+
+def test_a_flag_beats_the_config_file(tmp_path):
+    score = scored(tmp_path)
+    (tmp_path / "bitty.toml").write_text('[output]\nformat = "wav"\n')
+    result = runner.invoke(app, ["convert", str(score), "-o", str(tmp_path / "out"), "--ogg"])
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / "out" / "two_part.ogg").exists()
+    assert not (tmp_path / "out" / "two_part.wav").exists()
+
+
+def test_the_out_dir_can_come_from_config(tmp_path, monkeypatch):
+    """A relative [output] dir resolves against the CWD, not the config file's own directory.
+
+    The config lives two directories above the score, and the run happens
+    from a third directory unrelated to either — so a wrong implementation
+    that resolved `dir` relative to the config file (or the score) would
+    write nowhere near where this test looks.
+    """
+    project = tmp_path / "project"
+    scores_dir = project / "assets" / "scores"
+    scores_dir.mkdir(parents=True)
+    score = scores_dir / "two_part.musicxml"
+    shutil.copy(FIXTURE, score)
+    (project / "bitty.toml").write_text('[output]\ndir = "built"\n')
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    monkeypatch.chdir(workspace)
+
+    result = runner.invoke(app, ["convert", str(score)])
+    assert result.exit_code == 0, result.output
+    assert (workspace / "built" / "two_part.ogg").exists()
+    assert not (project / "built").exists()
+
+
+def test_a_config_file_can_choose_the_target(tmp_path):
+    """generic writes no fragment, so the directory never grows a manifest."""
+    score = scored(tmp_path)
+    out = tmp_path / "out"
+    (tmp_path / "bitty.toml").write_text('[output]\ntarget = "generic"\n')
+    result = runner.invoke(app, ["convert", str(score), "-o", str(out)])
+    assert result.exit_code == 0, result.output
+    assert (out / "two_part.ogg").exists()
+    assert not (out / "music.ron").exists()
+    assert not list(out.glob("*.bevy.ron"))
+
+
+def test_a_bad_config_aborts_before_anything_is_written(tmp_path):
+    score = scored(tmp_path)
+    out = tmp_path / "out"
+    (tmp_path / "bitty.toml").write_text("[echo]\nlevl = 0.5\n")
+    result = runner.invoke(app, ["convert", str(score), "-o", str(out)])
+    assert result.exit_code != 0
+    assert "echo.levl" in result.output
+    assert not out.exists(), "nothing is written before the config resolves"
+
+
+def test_an_unknown_target_in_config_is_reported(tmp_path):
+    score = scored(tmp_path)
+    (tmp_path / "bitty.toml").write_text('[output]\ntarget = "nintendo"\n')
+    result = runner.invoke(app, ["convert", str(score), "-o", str(tmp_path / "out")])
+    assert result.exit_code != 0
+    assert "nintendo" in result.output
+
+
+def test_a_preset_changes_the_arrangement(tmp_path):
+    score = scored(tmp_path)
+    runner.invoke(app, ["convert", str(score), "-o", str(tmp_path / "plain")])
+    runner.invoke(app, ["convert", str(score), "-o", str(tmp_path / "nes"), "--preset", "nes-tight"])
+    plain = Arrangement.from_json((tmp_path / "plain" / "two_part.arrangement.json").read_text())
+    nes = Arrangement.from_json((tmp_path / "nes" / "two_part.arrangement.json").read_text())
+    assert any(c.echo is not None for c in plain.channels)
+    assert all(c.echo is None for c in nes.channels), "nes-tight turns the echo off"
+
+
+def test_an_unknown_preset_lists_the_ones_that_exist(tmp_path):
+    score = scored(tmp_path)
+    result = runner.invoke(app, ["convert", str(score), "--preset", "chunky"])
+    assert result.exit_code != 0
+    assert "nes-tight" in result.output
+
+
+def test_an_explicit_config_path_is_used(tmp_path):
+    score = scored(tmp_path)
+    elsewhere = tmp_path / "shared.toml"
+    elsewhere.write_text('[output]\nformat = "wav"\n')
+    result = runner.invoke(
+        app, ["convert", str(score), "-o", str(tmp_path / "out"), "--config", str(elsewhere)]
+    )
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / "out" / "two_part.wav").exists()
+
+
+def test_render_reads_the_config_beside_the_arrangement(tmp_path):
+    score = scored(tmp_path)
+    runner.invoke(app, ["convert", str(score), "-o", str(tmp_path)])
+    (tmp_path / "bitty.toml").write_text('[output]\nformat = "wav"\n')
+    result = runner.invoke(
+        app, ["render", str(tmp_path / "two_part.arrangement.json"), "-o", str(tmp_path / "out")]
+    )
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / "out" / "two_part.wav").exists()
+
+
+def test_sections_takes_a_preset_without_complaint(tmp_path):
+    score = tmp_path / "minuet.mxl"
+    shutil.copy(MINUET, score)
+    result = runner.invoke(app, ["sections", str(score), "--preset", "lush"])
+    assert result.exit_code == 0, result.output
+
+
+def test_a_configured_sample_rate_reaches_the_written_file(tmp_path):
+    score = scored(tmp_path)
+    (tmp_path / "bitty.toml").write_text('[output]\nformat = "wav"\nsample_rate = 22050\n')
+    runner.invoke(app, ["convert", str(score), "-o", str(tmp_path / "out")])
+    _, rate = sf.read(tmp_path / "out" / "two_part.wav")
+    assert rate == 22050

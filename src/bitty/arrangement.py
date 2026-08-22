@@ -12,6 +12,14 @@ from dataclasses import asdict, dataclass, fields
 
 MAX_VELOCITY = 15
 
+# Vibrato's shape is timbre, so it travels in the arrangement rather than
+# living in the synth: a hand-edited file renders the same with no config
+# anywhere. This module is the bottom of the import graph, which is what makes
+# it the right owner of the values every other module measures against.
+VIBRATO_CENTS = 25.0
+VIBRATO_DELAY = 0.3
+VIBRATO_RATE_HZ = 5.5
+
 
 @dataclass(frozen=True)
 class Event:
@@ -37,6 +45,9 @@ class Instrument:
     cutoff_hz: float | None = None  # None means no filtering at all
     resonance: float = 0.7071  # biquad Q; 0.7071 is flat, higher peaks
     quantize: int | None = None  # triangle amplitude steps, e.g. 16 for NES
+    vibrato_cents: float = VIBRATO_CENTS  # depth of the sustain LFO
+    vibrato_delay: float = VIBRATO_DELAY  # seconds of silence before it fades in
+    vibrato_rate_hz: float = VIBRATO_RATE_HZ  # oscillations per second, once it fades in
 
 
 @dataclass(frozen=True)
