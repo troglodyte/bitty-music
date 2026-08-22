@@ -439,6 +439,9 @@ format = "ogg"          # "ogg" | "wav"
 dir = "out"
 sample_rate = 44100     # 8000-192000
 
+[voices]
+count = 5                # 3-5; narrows the roster — see [voices] count below
+
 [echo]
 on = true
 delay_beats = 0.75      # 0.0-16.0, in beats
