@@ -224,3 +224,63 @@ def test_an_unknown_preset_lists_the_ones_that_exist():
 
 def test_loading_nothing_is_the_defaults():
     assert load([]) == DEFAULTS
+
+
+from bitty.config import discover, resolve
+
+
+def test_nothing_found_is_not_an_error(tmp_path):
+    assert discover(tmp_path, "minuet") == []
+
+
+def test_the_project_file_is_found_in_the_score_s_own_directory(tmp_path):
+    (tmp_path / "bitty.toml").write_text("[echo]\nlevel = 0.5\n")
+    assert discover(tmp_path, "minuet") == [tmp_path / "bitty.toml"]
+
+
+def test_the_project_file_is_found_by_walking_upward(tmp_path):
+    scores = tmp_path / "assets" / "scores"
+    scores.mkdir(parents=True)
+    (tmp_path / "bitty.toml").write_text("[echo]\nlevel = 0.5\n")
+    assert discover(scores, "minuet") == [tmp_path / "bitty.toml"]
+
+
+def test_the_nearest_project_file_wins_outright(tmp_path):
+    """First hit, not merged across levels: a config either applies whole or not."""
+    scores = tmp_path / "scores"
+    scores.mkdir()
+    (tmp_path / "bitty.toml").write_text("[echo]\nlevel = 0.1\n")
+    (scores / "bitty.toml").write_text("[echo]\nlevel = 0.9\n")
+    assert discover(scores, "minuet") == [scores / "bitty.toml"]
+
+
+def test_the_per_piece_file_sits_above_the_project_file(tmp_path):
+    (tmp_path / "bitty.toml").write_text("[echo]\nlevel = 0.1\n")
+    (tmp_path / "minuet.bitty.toml").write_text("[echo]\nlevel = 0.9\n")
+    assert discover(tmp_path, "minuet") == [
+        tmp_path / "bitty.toml",
+        tmp_path / "minuet.bitty.toml",
+    ]
+    assert resolve(tmp_path, "minuet").echo.level == 0.9
+
+
+def test_a_per_piece_file_belongs_to_its_own_piece_only(tmp_path):
+    (tmp_path / "minuet.bitty.toml").write_text("[echo]\nlevel = 0.9\n")
+    assert discover(tmp_path, "ragtime") == []
+
+
+def test_an_explicit_config_beats_everything_discovered(tmp_path):
+    (tmp_path / "bitty.toml").write_text("[echo]\nlevel = 0.1\n")
+    (tmp_path / "minuet.bitty.toml").write_text("[echo]\nlevel = 0.2\n")
+    explicit = tmp_path / "elsewhere.toml"
+    explicit.write_text("[echo]\nlevel = 0.9\n")
+    assert resolve(tmp_path, "minuet", explicit=explicit).echo.level == 0.9
+
+
+def test_a_discovered_file_beats_the_preset(tmp_path):
+    (tmp_path / "bitty.toml").write_text("[echo]\non = true\n")
+    assert resolve(tmp_path, "minuet", preset="nes-tight").echo.on is True
+
+
+def test_resolve_with_nothing_around_is_the_defaults(tmp_path):
+    assert resolve(tmp_path, "minuet") == DEFAULTS

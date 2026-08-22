@@ -368,3 +368,51 @@ def load(paths: list[Path], preset: str | None = None) -> Config:
     for path in paths:
         config = merge(config, path.read_text(), str(path))
     return config
+
+
+PROJECT_NAME = "bitty.toml"
+PIECE_SUFFIX = ".bitty.toml"
+
+
+def discover(directory: Path, stem: str) -> list[Path]:
+    """The project file then the per-piece file, lowest precedence first.
+
+    The upward walk stops at the first `bitty.toml` it finds: a config two
+    directories up either applies whole or not at all. Merging across levels
+    would mean the value in front of you is never the whole story.
+
+    The per-piece file is `<stem>.bitty.toml` rather than `<stem>.toml`,
+    following the `.arrangement.json` convention — a bare `minuet.toml` would
+    collide with whatever else in the directory wants that name.
+    """
+    directory = directory.resolve()
+    found: list[Path] = []
+
+    for folder in (directory, *directory.parents):
+        candidate = folder / PROJECT_NAME
+        if candidate.is_file():
+            found.append(candidate)
+            break
+
+    piece = directory / f"{stem}{PIECE_SUFFIX}"
+    if piece.is_file():
+        found.append(piece)
+    return found
+
+
+def resolve(
+    directory: Path,
+    stem: str,
+    *,
+    preset: str | None = None,
+    explicit: Path | None = None,
+) -> Config:
+    """Everything but the flags. The CLI applies those, because it owns them.
+
+    `explicit` goes last because an explicit path is a deliberate act and
+    should beat a file that merely happened to be found.
+    """
+    paths = discover(directory, stem)
+    if explicit is not None:
+        paths.append(explicit)
+    return load(paths, preset)
