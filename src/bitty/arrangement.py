@@ -47,7 +47,7 @@ class Instrument:
     quantize: int | None = None  # triangle amplitude steps, e.g. 16 for NES
     vibrato_cents: float = VIBRATO_CENTS  # depth of the sustain LFO
     vibrato_delay: float = VIBRATO_DELAY  # seconds of silence before it fades in
-    vibrato_rate_hz: float = VIBRATO_RATE_HZ
+    vibrato_rate_hz: float = VIBRATO_RATE_HZ  # oscillations per second, once it fades in
 
 
 @dataclass(frozen=True)

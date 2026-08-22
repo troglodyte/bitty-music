@@ -9,9 +9,12 @@ from bitty.loop import MIN_LOOP_BARS, SEAM_RATIO
 def test_defaults_match_the_constants_they_replace():
     """The guard that lets every other test in the suite stay untouched.
 
-    Some of these values live in modules config cannot import, because those
-    modules import config. This assertion is the seam that keeps the two
-    copies honest.
+    Most of these module constants (`arrange.ARP_STEP_SEC`, `loop.MIN_LOOP_BARS`,
+    `loop.SEAM_RATIO`) are now derived from `DEFAULTS`, so the assertions
+    against them are tautologies that can never fail — they document the
+    relationship rather than guard it. `output.sample_rate` is the one real
+    cross-check left: `synth.SAMPLE_RATE` is an independent literal, and this
+    assertion is the seam that keeps that pair honest.
     """
     assert DEFAULTS.echo.delay_beats == voices.ECHO_BEATS
     assert DEFAULTS.echo.level == voices.ECHO_LEVEL
@@ -151,7 +154,7 @@ def test_the_global_vibrato_table_spreads_onto_every_voice():
     result = merge(DEFAULTS, "[vibrato]\ndepth_cents = 40.0\n", "bitty.toml")
     for voice in result.voices:
         assert voice.instrument.vibrato_cents == 40.0
-    assert result.vibrato.depth_cents == 40.0, "the arranger's copy moves too"
+    assert result.vibrato.depth_cents == 40.0, "the write-only staging copy moves too"
 
 
 def test_a_per_voice_vibrato_beats_the_global_one_in_the_same_file():
@@ -166,6 +169,18 @@ def test_a_file_with_no_vibrato_table_leaves_per_voice_overrides_alone():
     first = merge(DEFAULTS, "[voices.lead]\nvibrato_cents = 10.0\n", "a.toml")
     second = merge(first, "[echo]\nlevel = 0.5\n", "b.toml")
     assert roles(second)["lead"].instrument.vibrato_cents == 10.0
+
+
+def test_an_unrelated_vibrato_key_does_not_reset_a_per_voice_override():
+    """The spread pushes exactly the keys a file names, not all three.
+
+    A coarser implementation that spread the whole table whenever [vibrato]
+    appeared would silently reset the lead back to the default depth here.
+    """
+    first = merge(DEFAULTS, "[voices.lead]\nvibrato_cents = 10.0\n", "a.toml")
+    second = merge(first, "[vibrato]\nrate_hz = 6.0\n", "b.toml")
+    assert roles(second)["lead"].instrument.vibrato_cents == 10.0
+    assert roles(second)["lead"].instrument.vibrato_rate_hz == 6.0
 
 
 def test_per_voice_vibrato_delay_is_milliseconds_like_every_other_delay():
@@ -202,6 +217,11 @@ def test_nes_tight_turns_the_echo_off_and_centres_the_image():
     result = load([], preset="nes-tight")
     assert result.echo.on is False
     assert all(voice.pan == 0.0 for voice in result.voices), "mono hardware, mono image"
+    assert result.vibrato.depth_cents == 12.0, "shallower than the default 25.0"
+    assert result.vibrato.delay_sec == 0.42, "later than the default 0.3"
+    for voice in result.voices:
+        assert voice.instrument.vibrato_cents == 12.0
+        assert voice.instrument.vibrato_delay == 0.42
 
 
 def test_lush_widens_the_image_and_deepens_the_vibrato():

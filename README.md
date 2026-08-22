@@ -424,6 +424,10 @@ not the symlink's apparent location.
 on the command line is a deliberate act, and it should beat a file that
 merely happened to be found.
 
+A relative `[output] dir` is resolved against the directory you run `bitty`
+from, not against the config file that set it — the same rule a shell
+applies to any relative path you hand it.
+
 ### Complete example
 
 Every table `bitty` understands, with every key at its default value:

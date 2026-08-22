@@ -302,12 +302,29 @@ def test_a_flag_beats_the_config_file(tmp_path):
     assert not (tmp_path / "out" / "two_part.wav").exists()
 
 
-def test_the_out_dir_can_come_from_config(tmp_path):
-    score = scored(tmp_path)
-    (tmp_path / "bitty.toml").write_text(f'[output]\ndir = "{tmp_path / "built"}"\n')
+def test_the_out_dir_can_come_from_config(tmp_path, monkeypatch):
+    """A relative [output] dir resolves against the CWD, not the config file's own directory.
+
+    The config lives two directories above the score, and the run happens
+    from a third directory unrelated to either — so a wrong implementation
+    that resolved `dir` relative to the config file (or the score) would
+    write nowhere near where this test looks.
+    """
+    project = tmp_path / "project"
+    scores_dir = project / "assets" / "scores"
+    scores_dir.mkdir(parents=True)
+    score = scores_dir / "two_part.musicxml"
+    shutil.copy(FIXTURE, score)
+    (project / "bitty.toml").write_text('[output]\ndir = "built"\n')
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    monkeypatch.chdir(workspace)
+
     result = runner.invoke(app, ["convert", str(score)])
     assert result.exit_code == 0, result.output
-    assert (tmp_path / "built" / "two_part.ogg").exists()
+    assert (workspace / "built" / "two_part.ogg").exists()
+    assert not (project / "built").exists()
 
 
 def test_a_config_file_can_choose_the_target(tmp_path):

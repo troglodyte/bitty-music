@@ -42,7 +42,7 @@ class EchoSettings:
 
 @dataclass(frozen=True)
 class Arp:
-    step_sec: float = 0.016  # asserted equal to arrange.ARP_STEP_SEC
+    step_sec: float = 0.016  # arrange.ARP_STEP_SEC is derived from this value
 
 
 @dataclass(frozen=True)
@@ -52,6 +52,14 @@ class Vibrato:
     `min_note_sec` is arranger policy rather than timbre — it decides which
     notes get vibrato at all — so it stays global while the other three are
     spread onto each instrument.
+
+    `depth_cents`, `delay_sec`, and `rate_hz` are write-only staging past that
+    point: `merge` reads them to populate `_spread`, but nothing downstream
+    reads this dataclass's copies again. The authoritative shape lives on each
+    instrument's own `vibrato_*` fields once `merge` returns; a `Config` built
+    by hand (e.g. `replace(DEFAULTS, vibrato=...)`) rather than through `merge`
+    will find these three inert, since only `merge` keeps the two
+    representations in sync.
     """
 
     depth_cents: float = VIBRATO_CENTS
@@ -62,8 +70,8 @@ class Vibrato:
 
 @dataclass(frozen=True)
 class LoopSettings:
-    min_bars: int = 8  # asserted equal to loop.MIN_LOOP_BARS
-    seam_ratio: float = 1.0  # asserted equal to loop.SEAM_RATIO
+    min_bars: int = 8  # loop.MIN_LOOP_BARS is derived from this value
+    seam_ratio: float = 1.0  # loop.SEAM_RATIO is derived from this value
 
 
 @dataclass(frozen=True)
