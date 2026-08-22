@@ -96,6 +96,13 @@ def convert(
     arrangement = arrange(parsed)
     audio = render_audio(arrangement)
     chosen = loop_stage.choose(candidates, audio, arrangement, SAMPLE_RATE)
+    if split and chosen is None:
+        # Checked before anything is written: writing the audio file first and
+        # only then failing on the split leaves a stray .ogg with no
+        # .arrangement.json beside it, and _write_split would print the same
+        # "no loop" reason _report already did.
+        typer.echo("  --split needs a loop and none was found — try --loop-from BAR", err=True)
+        raise typer.Exit(1)
     arrangement = replace(arrangement, loop=chosen.loop if chosen else None)
 
     _write_audio(audio, out_dir, score.stem, wav)

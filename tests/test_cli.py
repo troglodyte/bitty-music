@@ -211,10 +211,15 @@ def test_a_loop_starting_at_zero_writes_no_intro(tmp_path):
 
 
 def test_split_without_a_loop_is_a_hard_error(tmp_path):
-    """Asking for a split is asking for a loop. A warning here gets missed."""
+    """Asking for a split is asking for a loop. A warning here gets missed.
+
+    Checked before any output is written, so a failed --split leaves nothing
+    behind — not a stray .ogg with no .arrangement.json beside it.
+    """
     result = runner.invoke(app, ["convert", str(FIXTURE), "-o", str(tmp_path), "--split"])
     assert result.exit_code == 1
     assert "--loop-from" in result.output
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_render_can_split_a_hand_edited_arrangement(tmp_path):
