@@ -1,4 +1,6 @@
-from bitty.voices import ARP_ROLE, BASS_ROLE, LEAD_ROLE, MIDDLE_ROLES, ROSTER
+from dataclasses import replace
+
+from bitty.voices import MIN_VOICES, ROSTER, VOICES, Roster
 
 
 def test_the_roster_is_the_spec_s_five_voices_in_score_order():
@@ -30,9 +32,44 @@ def test_the_filter_ships_off():
     assert all(v.instrument.cutoff_hz is None for v in ROSTER)
 
 
-def test_the_role_constants_point_into_the_roster():
-    roles = {v.role for v in ROSTER}
-    assert {LEAD_ROLE, BASS_ROLE, ARP_ROLE} <= roles
-    assert set(MIDDLE_ROLES) <= roles
-    assert LEAD_ROLE not in MIDDLE_ROLES and BASS_ROLE not in MIDDLE_ROLES
-    assert ARP_ROLE in MIDDLE_ROLES
+def test_the_default_roster_plays_all_five_voices():
+    assert [v.role for v in ROSTER] == ["lead", "counter", "inner_a", "inner_b", "bass"]
+    assert ROSTER.count == len(VOICES) == 5
+
+
+def test_the_pins_survive_every_legal_count():
+    """Lead and bass are structural, not preferences: without both there
+    is no reduction, only a pile."""
+    for count in range(MIN_VOICES, len(VOICES) + 1):
+        roster = replace(ROSTER, count=count)
+        roles = [v.role for v in roster]
+        assert roles[0] == roster.lead == "lead"
+        assert roles[-1] == roster.bass == "bass"
+        assert len(roles) == count
+
+
+def test_middles_fall_from_the_narrowest_end():
+    assert replace(ROSTER, count=5).middles == ("counter", "inner_a", "inner_b")
+    assert replace(ROSTER, count=4).middles == ("counter", "inner_a")
+    assert replace(ROSTER, count=3).middles == ("counter",)
+
+
+def test_the_arp_carrier_is_the_narrowest_surviving_middle():
+    assert replace(ROSTER, count=5).arp == "inner_b"
+    assert replace(ROSTER, count=4).arp == "inner_a"
+    assert replace(ROSTER, count=3).arp == "counter"
+
+
+def test_the_arp_carrier_is_always_a_voice_that_plays():
+    """The invariant the floor of 3 exists to protect."""
+    for count in range(MIN_VOICES, len(VOICES) + 1):
+        roster = replace(ROSTER, count=count)
+        assert roster.arp in {v.role for v in roster}
+        assert roster.middles, "an empty middles has no one to carry the overflow"
+
+
+def test_truncation_is_a_view_not_a_deletion():
+    """Dropped voices stay addressable so any layer can override them."""
+    roster = replace(ROSTER, count=3)
+    assert [v.role for v in roster.voices] == [v.role for v in VOICES]
+    assert "inner_b" not in {v.role for v in roster}
