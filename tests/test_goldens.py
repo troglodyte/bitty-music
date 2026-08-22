@@ -72,7 +72,8 @@ def test_events_are_playable(name):
 def test_dense_writing_arpeggiates_and_sparse_writing_does_not():
     ragtime = {c.role: c.events for c in arranged("ragtime").channels}
     chorale = {c.role: c.events for c in arranged("chorale").channels}
-    assert [e for e in ragtime["inner_b"] if e.arp], (
-        "six-note ragtime chords should overflow into an arpeggio"
+    assert len([e for e in ragtime["inner_b"] if e.arp]) == 8, (
+        "ragtime overflows on eight onsets; a count, not a bool, because "
+        "arpeggiating only the first one would satisfy 'some event has arp'"
     )
     assert not [e for e in chorale["inner_b"] if e.arp]

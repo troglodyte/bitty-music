@@ -293,10 +293,15 @@ def test_a_short_dense_chord_still_sounds_every_pitch():
 
 
 def test_sparse_writing_produces_no_arpeggio():
+    """`dur == 1.0` alone stopped meaning anything once the arpeggio became one
+    note instead of many: a spuriously arpeggiated sparse chord now keeps the
+    chord's own duration too. Absence of `arp` is what the name claims."""
     arrangement = arrange(
         score_of(note(72, 0.0, dur=1.0), note(64, 0.0, dur=1.0), note(48, 0.0, dur=1.0))
     )
-    assert all(e.dur == 1.0 for c in arrangement.channels for e in c.events)
+    assert all(
+        e.dur == 1.0 and not e.arp for c in arrangement.channels for e in c.events
+    )
 
 
 def test_the_arpeggio_never_overlaps_the_channel_s_own_notes():
@@ -402,6 +407,40 @@ def test_the_arpeggio_step_comes_from_config():
     assert event.arp
     assert event.dur == pytest.approx(len(event.arp) * 0.032)
     assert event.dur != pytest.approx(len(event.arp) * 0.016)
+
+
+def test_the_arpeggio_rate_travels_in_the_instrument_not_the_config():
+    """The test that excludes reading the config table.
+
+    `merge` sets `[arp] rate_ms` on the table *and* spreads it onto every
+    instrument, so the test above passes whichever of the two the arranger
+    reads. Moving only the carrier's instrument, with the table left at its
+    default, is what tells them apart — and it is exactly the case a
+    hand-edited arrangement with no config anywhere relies on.
+    """
+    settings = roster_of(3)
+    voices_cfg = settings.voices
+    carrier = voices_cfg.voices[1]
+    assert carrier.role == voices_cfg.arp, "count 3 puts the overflow on the counter"
+    settings = replace(
+        settings,
+        voices=replace(
+            voices_cfg,
+            voices=(
+                voices_cfg.voices[0],
+                replace(carrier, instrument=replace(carrier.instrument, arp_rate_sec=0.032)),
+                *voices_cfg.voices[2:],
+            ),
+        ),
+    )
+    assert settings.arp.step_sec == 0.016, "the table must stay put or this proves nothing"
+    score = score_of(
+        note(72, 0.0, dur=0.01), note(69, 0.0, dur=0.01),
+        note(67, 0.0, dur=0.01), note(64, 0.0, dur=0.01), note(48, 0.0, dur=0.01),
+    )
+    event = channels(arrange(score, settings))["counter"].events[0]
+    assert event.arp
+    assert event.dur == pytest.approx(len(event.arp) * 0.032)
 
 
 def test_the_default_argument_still_arranges():

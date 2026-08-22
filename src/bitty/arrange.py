@@ -283,7 +283,15 @@ def _arpeggiate(
 
 
 def _clip_overlaps(takes: list[_Take]) -> list[_Take]:
-    """One channel, one note — including where a cycle runs into a held note."""
+    """One channel, one note — including where a cycle runs into a held note.
+
+    This outranks the "every member sounds at least once" span rule above.
+    A cycle stretched to `len(pitches) * rate_sec` may run past where its
+    chord ended, and if the channel's next note starts inside that stretch,
+    the cycle is cut there and its last steps go unheard. Two notes at once
+    on one channel is the worse fault: a chip channel cannot do it, so the
+    arrangement would be describing sound the target cannot make.
+    """
     for earlier, later in zip(takes, takes[1:]):
         if earlier.t + earlier.dur > later.t + EPSILON:
             earlier.dur = later.t - earlier.t
