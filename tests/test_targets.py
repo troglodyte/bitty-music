@@ -186,3 +186,67 @@ def test_assemble_ignores_another_targets_fragments(tmp_path):
 def test_assemble_writes_nothing_when_there_are_no_fragments(tmp_path):
     assert targets.assemble(tmp_path, "generic") is None
     assert not (tmp_path / "music.ron").exists()
+
+
+def test_bevy_writes_an_intro_and_a_loop(tmp_path):
+    written = targets.TARGETS["bevy"](a_render(loop=(1.0, 2.0)), tmp_path, "piece")
+
+    assert (tmp_path / "piece_intro.ogg").exists()
+    assert (tmp_path / "piece_loop.ogg").exists()
+    assert (tmp_path / "piece.bevy.ron") in written
+
+
+def test_the_bevy_pieces_have_the_durations_the_loop_names(tmp_path):
+    targets.TARGETS["bevy"](a_render(loop=(1.0, 2.0), seconds=3.0), tmp_path, "piece", audio_format="wav")
+
+    intro, _ = sf.read(tmp_path / "piece_intro.wav")
+    body, _ = sf.read(tmp_path / "piece_loop.wav")
+    assert abs(len(intro) / 44100 - 1.0) < 0.01
+    assert abs(len(body) / 44100 - 1.0) < 0.01
+
+
+def test_bevy_drops_the_audio_past_the_loop_end(tmp_path):
+    """Same rule --split had: what follows the loop is never reached."""
+    targets.TARGETS["bevy"](a_render(loop=(0.0, 1.0), seconds=3.0), tmp_path, "piece", audio_format="wav")
+
+    body, _ = sf.read(tmp_path / "piece_loop.wav")
+    assert abs(len(body) / 44100 - 1.0) < 0.01
+
+
+def test_a_loop_starting_at_zero_writes_no_intro(tmp_path):
+    written = targets.TARGETS["bevy"](a_render(loop=(0.0, 2.0)), tmp_path, "piece")
+
+    assert not (tmp_path / "piece_intro.ogg").exists()
+    assert (tmp_path / "piece_loop.ogg") in written
+
+
+def test_bevy_without_a_loop_emits_a_one_shot(tmp_path):
+    """A piece with no loop point is a legitimate cue, not a failure."""
+    written = targets.TARGETS["bevy"](a_render(loop=None), tmp_path, "piece")
+
+    assert (tmp_path / "piece.ogg") in written
+    assert not (tmp_path / "piece_loop.ogg").exists()
+    assert 'full: "piece.ogg",' in (tmp_path / "piece.bevy.ron").read_text()
+
+
+def test_the_bevy_fragment_is_exactly_this(tmp_path):
+    """The golden. A format change should read as a diff, not a surprise."""
+    targets.TARGETS["bevy"](a_render(loop=(1.0, 2.0)), tmp_path, "minuet")
+
+    assert (tmp_path / "minuet.bevy.ron").read_text() == (
+        '        "minuet": (\n'
+        '            title: "Minuet in G",\n'
+        '            intro: "minuet_intro.ogg",\n'
+        '            loop_: "minuet_loop.ogg",\n'
+        "            bpm: 120.0,\n"
+        "            bars: (1, 16),\n"
+        "        ),\n"
+    )
+
+
+def test_the_bevy_fragment_names_wav_files_when_asked(tmp_path):
+    targets.TARGETS["bevy"](a_render(loop=(1.0, 2.0)), tmp_path, "piece", audio_format="wav")
+
+    text = (tmp_path / "piece.bevy.ron").read_text()
+    assert 'intro: "piece_intro.wav",' in text
+    assert 'loop_: "piece_loop.wav",' in text

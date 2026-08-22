@@ -131,6 +131,41 @@ def _emit_generic(
     return [path]
 
 
+def _emit_bevy(
+    render: Render, out_dir: Path, name: str, *, audio_format: str = "ogg"
+) -> list[Path]:
+    """Two complete files, because rodio can only loop a whole file.
+
+    bevy_audio has no seek and no loop region: the intro and the loop have to
+    be separate assets. Audio past the loop end is dropped — nothing ever
+    reaches it.
+    """
+    written: list[Path] = []
+    fields = [("title", _ron_str(_title(render, name)))]
+
+    if render.loop_start_sample is None:
+        written.append(write_audio(render.audio, out_dir, name, audio_format))
+        fields.append(("full", _ron_str(f"{name}.{audio_format}")))
+    else:
+        start, end = render.loop_start_sample, render.loop_end_sample
+        if start > 0:
+            written.append(
+                write_audio(render.audio[:start], out_dir, f"{name}_intro", audio_format)
+            )
+            fields.append(("intro", _ron_str(f"{name}_intro.{audio_format}")))
+        else:
+            typer.echo("  loop starts at 0:00 — no intro to write")
+        written.append(
+            write_audio(render.audio[start:end], out_dir, f"{name}_loop", audio_format)
+        )
+        fields.append(("loop_", _ron_str(f"{name}_loop.{audio_format}")))
+
+    fields += _common_fields(render)
+    written.append(_write_fragment(out_dir, name, "bevy", _entry(name, fields)))
+    return written
+
+
 TARGETS: dict[str, Emitter] = {
+    "bevy": _emit_bevy,
     "generic": _emit_generic,
 }
