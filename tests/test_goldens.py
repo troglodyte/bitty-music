@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from bitty.arrange import ARP_STEP_SEC, arrange
+from bitty.arrange import arrange
 from bitty.ingest import ingest
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -50,13 +50,11 @@ def test_every_source_note_is_heard(name):
     events = [e for c in arranged(name).channels for e in c.events]
     for note in score.notes:
         assert any(
-            e.pitch == note.pitch
-            and (
-                abs(e.t - note.start) <= EPSILON
-                or (
-                    abs(e.dur - ARP_STEP_SEC) < 1e-9
-                    and note.start - EPSILON <= e.t <= note.start + note.dur + EPSILON
-                )
+            (e.pitch == note.pitch and abs(e.t - note.start) <= EPSILON)
+            or (
+                e.arp
+                and note.pitch - e.pitch in e.arp
+                and note.start - EPSILON <= e.t <= note.start + note.dur + EPSILON
             )
             for e in events
         ), f"{note} never sounds"
@@ -74,6 +72,7 @@ def test_events_are_playable(name):
 def test_dense_writing_arpeggiates_and_sparse_writing_does_not():
     ragtime = {c.role: c.events for c in arranged("ragtime").channels}
     chorale = {c.role: c.events for c in arranged("chorale").channels}
-    steps = [e for e in ragtime["inner_b"] if abs(e.dur - 0.016) < 1e-9]
-    assert len(steps) > 50, "six-note ragtime chords should overflow into an arpeggio"
-    assert not [e for e in chorale["inner_b"] if abs(e.dur - 0.016) < 1e-9]
+    assert [e for e in ragtime["inner_b"] if e.arp], (
+        "six-note ragtime chords should overflow into an arpeggio"
+    )
+    assert not [e for e in chorale["inner_b"] if e.arp]
