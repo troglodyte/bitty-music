@@ -193,7 +193,7 @@ didn't have one, rather than invented. `title` falls back to the file stem
 and `bpm` to `0.0` when `meta` is missing them — a hand-edited arrangement
 can be missing any key, and a missing one must not crash an emit.
 
-The matching Rust side, to paste straight into the game:
+The matching Rust side for `bevy`, to paste straight into the game:
 
 ```rust
 #[derive(serde::Deserialize)]
@@ -211,6 +211,49 @@ pub struct Track {
     #[serde(default)] pub bars: Option<(u32, u32)>,
 }
 ```
+
+`bevy-kira` writes a different shape — one file plus loop offsets in
+seconds, rather than an intro/loop/full split — so it needs its own struct
+rather than reusing `Track`. This is what `music.ron` actually contains
+under `--target bevy-kira`:
+
+```ron
+#![enable(implicit_some)]
+(
+    tracks: {
+        "minuet": (
+            title: "minuet",
+            file: "minuet.ogg",
+            loop_start: 0.0,
+            loop_end: 12.0,
+            bpm: 120.0,
+            bars: (1, 16),
+        ),
+    },
+)
+```
+
+```rust
+#[derive(serde::Deserialize)]
+pub struct KiraManifest {
+    pub tracks: std::collections::HashMap<String, KiraTrack>,
+}
+
+#[derive(serde::Deserialize)]
+pub struct KiraTrack {
+    pub title: String,
+    pub file: String,
+    #[serde(default)] pub loop_start: Option<f32>,
+    #[serde(default)] pub loop_end: Option<f32>,
+    pub bpm: f32,
+    #[serde(default)] pub bars: Option<(u32, u32)>,
+}
+```
+
+`loop_start`/`loop_end` are seconds, not samples — kira takes seconds, and
+this is the only target where the offsets do not become samples. They are
+omitted from the RON (not written as `0.0`) when the arrangement has no
+loop, which is why they are `Option<f32>` rather than plain `f32`.
 
 ## How it works
 
@@ -342,13 +385,157 @@ the bass, and how many octave-plus leaps the melody makes. Those numbers are
 anchored to a measured baseline. A failure there means a change cost the voice
 leading, which is a reason to stop — not to lower the threshold.
 
+## Configuration
+
+Every knob that isn't a per-run flag lives in TOML. Six layers stack, each
+free to override anything an earlier one set, first to last:
+
+| Layer | Source |
+|-------|--------|
+| 1 | Built-in defaults (`Config`/`DEFAULTS` in `config.py`) |
+| 2 | `--preset NAME` |
+| 3 | The nearest `bitty.toml`, walking up from the score's directory |
+| 4 | `<stem>.bitty.toml`, next to the score |
+| 5 | `--config PATH` |
+| 6 | Flags: `--wav`/`--ogg`, `-o`/`--out-dir`, `--target` |
+
+### File discovery
+
+`bitty` looks for two kinds of file, and both are optional.
+
+**`bitty.toml`** is a project-wide config. `discover` walks upward from the
+score's directory through its parents and stops at the *first* `bitty.toml`
+it finds — it does not keep climbing to also layer in one from two
+directories further up. A config applies whole or not at all: if it merged
+across levels, the file sitting in front of you would never be the whole
+story — you'd also have to know what some ancestor directory contributed.
+
+**`<stem>.bitty.toml`** is a per-piece override, e.g. `minuet.bitty.toml`
+next to `minuet.mxl`. It follows the existing `.arrangement.json`
+convention (`minuet.arrangement.json`) rather than being a bare
+`minuet.toml`, because a bare `<stem>.toml` would collide with whatever
+else in the directory already wants that name.
+
+`discover()` resolves the score's directory to its real path before
+walking upward, so a symlinked score directory searches its real ancestry,
+not the symlink's apparent location.
+
+`--config PATH` (layer 5) sits above both discovered files: naming a file
+on the command line is a deliberate act, and it should beat a file that
+merely happened to be found.
+
+### Complete example
+
+Every table `bitty` understands, with every key at its default value:
+
+```toml
+[output]
+target = "bevy"        # bevy | bevy-kira | generic — checked by the CLI, not here
+format = "ogg"          # "ogg" | "wav"
+dir = "out"
+sample_rate = 44100     # 8000-192000
+
+[echo]
+on = true
+delay_beats = 0.75      # 0.0-16.0, in beats
+level = 0.35            # 0.0-1.0
+
+[arp]
+rate_ms = 16.0           # >=1.0; the overflow arpeggio's step time
+
+[vibrato]
+depth_cents = 25.0       # 0.0-1200.0
+delay_ms = 300            # >=0.0; silence before the LFO fades in
+rate_hz = 5.5             # 0.0-40.0
+min_note_ms = 500         # >=0.0; a note shorter than this never gets vibrato
+
+[loop]
+min_bars = 8              # >=1, whole bars
+seam_ratio = 1.0          # >=0.0
+```
+
+`[vibrato]`'s first three keys are spread onto every voice's instrument;
+`min_note_ms` stays global rather than spreading, because it is arranger
+policy — it decides *which* notes get vibrato at all — not a timbre
+setting like the other three.
+
+### `[voices.<role>]`
+
+Five tables, one per role: `lead`, `counter`, `inner_a`, `inner_b`, `bass`.
+A key left out of a role's table keeps that role's built-in value (the
+roster in `voices.py`); every key below is optional.
+
+| Key | Range | Belongs to |
+|-----|-------|------------|
+| `pan` | -1.0 to 1.0 | the voice |
+| `wave` | `pulse` \| `triangle` \| `saw` \| `noise` | the instrument |
+| `duty` | 0.0-1.0 (pulse only) | the instrument |
+| `volume_env` | list of whole numbers, 0-15 | the instrument |
+| `pitch_env` | list of whole numbers, -48 to 48 | the instrument |
+| `cutoff_hz` | >=20.0 | the instrument |
+| `resonance` | 0.1-20.0 | the instrument |
+| `quantize` | whole number, 2-256 | the instrument |
+| `vibrato_cents` | 0.0-1200.0 | the instrument |
+| `vibrato_delay_ms` | >=0.0 | the instrument |
+| `vibrato_rate_hz` | 0.0-40.0 | the instrument |
+
+Within one file, order is: the global `[vibrato]` table sets every voice
+first, then a `[voices.<role>]` table overrides one role afterward. Across
+files, it's simpler — the later file's value just wins, same as every
+other key.
+
+### Milliseconds in the file, seconds in the code
+
+Every key ending in `_ms` — `arp.rate_ms`, `vibrato.delay_ms`,
+`vibrato.min_note_ms`, `voices.<role>.vibrato_delay_ms` — is milliseconds
+in TOML and seconds once loaded into `Config`. The conversion happens once,
+in `config.py`, so neither the file format nor the rest of the code has to
+carry the other side's convention.
+
+### Presets
+
+Two ship in `presets/`, selected with `--preset NAME`:
+
+- **`nes-tight`** — closer to the hardware: no echo, a mono image (every
+  voice's pan pinned to `0.0`), and vibrato that arrives later and
+  shallower. **It changes timbre only.** There is no `count` key yet, so
+  it cannot actually drop the roster to four channels the way real NES
+  hardware would — the name overclaims slightly on that point (see
+  Status).
+- **`lush`** — the other direction: a longer, louder echo, a wide stereo
+  image, and vibrato that arrives early enough to sing on ordinary
+  phrase-length notes.
+
+### Unknown keys are an error, not a warning
+
+A typo'd key stops the run instead of silently doing nothing — a tuning
+tool's worst failure mode is a config that looks like it worked and
+didn't. For example, `[echo]` with `onn = true` instead of `on = true`
+produces:
+
+```
+$ bitty convert minuet.mxl --config bad.bitty.toml
+Invalid value for --config: bad.bitty.toml: echo.onn: unknown key; [echo]
+accepts delay_beats, level, on
+```
+
+The same happens for an unknown table (`unknown table; bitty config accepts
+arp, echo, loop, output, vibrato, voices`) and an unknown `[voices.<role>]`
+role (`unknown voice; the roster is lead, counter, inner_a, inner_b, bass`)
+or key.
+
 ## Status
 
 Phase 4 is done: ingest, synthesis, the reduction, articulation, structural
 analysis, and looping — the loop cascade, `--bars` and `--loop-from`, and the
-intro/loop split. Phase 5a is done: the `Render` contract, the `bevy`,
-`bevy-kira`, and `generic` targets, and `music.ron` assembly. There is no
-config yet — Phase 5b picks up TOML config and presets.
+intro/loop split. Phase 5 is done, both halves: 5a's `Render` contract, the
+`bevy`, `bevy-kira`, and `generic` targets, and `music.ron` assembly; 5b's
+TOML config, the precedence cascade, and the two shipped presets.
+
+Deliberately still ahead: `[transform]` (`transpose`, `tempo_scale`) as its
+own phase with its own auditions; `voices.count`, which is what an honest
+four-channel `nes-tight` would need; and tail-wrapping, deferred since
+Phase 4b pending an audition of its own.
 
 Design documents and per-phase implementation plans live in
 `docs/superpowers/`.
