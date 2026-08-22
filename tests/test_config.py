@@ -39,6 +39,26 @@ def test_the_defaults_describe_the_shipped_behaviour():
 import pytest
 
 from bitty.config import ConfigError, merge
+from dataclasses import replace
+
+
+def test_the_roster_survives_a_merge_as_a_roster():
+    """A merged config still answers .arp, or the arranger loses its carrier."""
+    result = merge(DEFAULTS, '[voices.lead]\nduty = 0.25\n', "test")
+    assert isinstance(result.voices, voices.Roster)
+    assert result.voices.arp == "inner_b"
+
+
+def test_a_vibrato_spread_reaches_voices_that_are_not_playing():
+    """A dropped voice must still be spread: if a later layer raises the
+    count it would otherwise come back without the vibrato."""
+    result = merge(
+        replace(DEFAULTS, voices=replace(DEFAULTS.voices, count=3)),
+        "[vibrato]\ndepth_cents = 40.0\n",
+        "test",
+    )
+    by_role = {v.role: v for v in result.voices.voices}
+    assert by_role["inner_b"].instrument.vibrato_cents == 40.0
 
 
 def test_a_value_from_a_file_beats_the_default():

@@ -20,7 +20,7 @@ from pathlib import Path
 
 from bitty.arrangement import MAX_VELOCITY, VIBRATO_CENTS, VIBRATO_DELAY, VIBRATO_RATE_HZ
 from bitty.lfo import MIN_NOTE_SEC
-from bitty.voices import ECHO_BEATS, ECHO_LEVEL, ROSTER, Voice
+from bitty.voices import ECHO_BEATS, ECHO_LEVEL, ROSTER, Roster
 
 
 @dataclass(frozen=True)
@@ -81,7 +81,7 @@ class Config:
     arp: Arp = Arp()
     vibrato: Vibrato = Vibrato()
     loop: LoopSettings = LoopSettings()
-    voices: tuple[Voice, ...] = ROSTER
+    voices: Roster = ROSTER
 
 
 DEFAULTS = Config()
@@ -266,18 +266,25 @@ def _spread(roster, vibrato, named):
     Only the keys it named: spreading all three every time would let a later
     file with an unrelated [vibrato] table silently undo an earlier
     [voices.lead] override.
+
+    Every voice, including ones the count has dropped. A dropped voice that
+    missed a spread would reappear un-spread if a later layer raised the
+    count.
     """
     if not named:
         return roster
     changes = {_VIBRATO_SPREAD[field]: getattr(vibrato, field) for field in named}
-    return tuple(
-        replace(voice, instrument=replace(voice.instrument, **changes))
-        for voice in roster
+    return replace(
+        roster,
+        voices=tuple(
+            replace(voice, instrument=replace(voice.instrument, **changes))
+            for voice in roster.voices
+        ),
     )
 
 
 def _voices(roster, raw, source):
-    by_role = {voice.role: voice for voice in roster}
+    by_role = {voice.role: voice for voice in roster.voices}
     if not isinstance(raw, dict):
         raise ConfigError(source, "voices", "expected tables like [voices.lead]")
 
@@ -311,7 +318,7 @@ def _voices(roster, raw, source):
             **voice_changes,
         )
 
-    return tuple(by_role[voice.role] for voice in roster)
+    return replace(roster, voices=tuple(by_role[voice.role] for voice in roster.voices))
 
 
 def merge(config: Config, text: str, source: str) -> Config:
