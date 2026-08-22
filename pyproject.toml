@@ -9,6 +9,7 @@ description = "Classical scores to chiptune audio"
 requires-python = ">=3.11"
 dependencies = [
     "music21>=9.1",
+    "mutagen>=1.47",
     "numpy>=1.26",
     "scipy>=1.11",
     "soundfile>=0.12",
