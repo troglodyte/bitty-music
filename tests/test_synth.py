@@ -1,7 +1,8 @@
+import pytest
 import numpy as np
 
-from bitty.arrangement import Arrangement, Channel, Echo, Event, Instrument
-from bitty.synth import SAMPLE_RATE, render
+from bitty.arrangement import Arrangement, Channel, Echo, Event, Instrument, Loop
+from bitty.synth import SAMPLE_RATE, render, Render
 
 
 def one_note(
@@ -193,3 +194,59 @@ def test_vibrato_changes_only_the_notes_that_ask_for_it():
         render(one_note(dur=2.0, vibrato=True)),
         render(one_note(dur=2.0, vibrato=False)),
     )
+
+
+def test_render_of_converts_loop_seconds_to_samples():
+    arrangement = Arrangement(
+        meta={"title": "t", "bpm": 120.0},
+        channels=(),
+        loop=Loop(start_sec=1.0, end_sec=2.0),
+    )
+    audio = np.zeros((44100 * 3, 2), dtype=np.float32)
+
+    result = Render.of(arrangement, audio)
+
+    assert result.loop_start_sample == 44100
+    assert result.loop_end_sample == 88200
+    assert result.sample_rate == 44100
+
+
+def test_render_of_clamps_the_loop_end_to_the_buffer():
+    """A loop end past the rendered tail is the echo being cut, not a bug."""
+    arrangement = Arrangement(
+        meta={}, channels=(), loop=Loop(start_sec=0.0, end_sec=99.0)
+    )
+    audio = np.zeros((44100, 2), dtype=np.float32)
+
+    result = Render.of(arrangement, audio)
+
+    assert result.loop_end_sample == 44100
+
+
+def test_render_of_carries_no_loop_through_as_none():
+    arrangement = Arrangement(meta={}, channels=(), loop=None)
+
+    result = Render.of(arrangement, np.zeros((10, 2), dtype=np.float32))
+
+    assert result.loop_start_sample is None
+    assert result.loop_end_sample is None
+
+
+def test_render_of_copies_meta_rather_than_aliasing_it():
+    meta = {"title": "t"}
+    result = Render.of(Arrangement(meta=meta, channels=()), np.zeros((10, 2)))
+
+    result.meta["title"] = "changed"
+
+    assert meta["title"] == "t"
+
+
+def test_a_half_specified_loop_is_rejected_at_construction():
+    """One set and one None is a bug. Catch it here, not in an emitter."""
+    audio = np.zeros((10, 2), dtype=np.float32)
+
+    with pytest.raises(ValueError):
+        Render(audio=audio, sample_rate=44100, meta={}, loop_start_sample=0)
+
+    with pytest.raises(ValueError):
+        Render(audio=audio, sample_rate=44100, meta={}, loop_end_sample=10)

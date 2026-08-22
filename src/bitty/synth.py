@@ -10,6 +10,7 @@ blocker, soft clip.
 """
 
 import math
+from dataclasses import dataclass
 
 import numpy as np
 
@@ -24,6 +25,54 @@ FADE_SECONDS = 0.002
 MIX_HEADROOM = 0.9
 A4_MIDI = 69
 A4_HZ = 440.0
+
+
+@dataclass(frozen=True, eq=False)
+class Render:
+    """A rendered buffer plus where it loops, in samples.
+
+    The boundary the targets stage consumes. `eq=False` because the default
+    __eq__ would compare numpy arrays and raise on the ambiguous truth value.
+
+    The loop is optional: a piece whose cascade found nothing is still worth
+    emitting as a one-shot cue.
+    """
+
+    audio: np.ndarray  # float32 [n_samples, 2]
+    sample_rate: int
+    meta: dict  # arrangement.meta, copied
+    loop_start_sample: int | None = None
+    loop_end_sample: int | None = None
+
+    def __post_init__(self) -> None:
+        if (self.loop_start_sample is None) != (self.loop_end_sample is None):
+            raise ValueError(
+                "loop_start_sample and loop_end_sample must both be set or both be None"
+            )
+
+    @classmethod
+    def of(
+        cls,
+        arrangement: Arrangement,
+        audio: np.ndarray,
+        sample_rate: int = SAMPLE_RATE,
+    ) -> "Render":
+        """Join an arrangement's loop to its rendered audio.
+
+        The one place seconds become samples. Clamping the end to the buffer
+        is the echo tail 4b measured and accepted, not an error.
+        """
+        start = end = None
+        if arrangement.loop is not None:
+            start = max(0, round(arrangement.loop.start_sec * sample_rate))
+            end = min(round(arrangement.loop.end_sec * sample_rate), len(audio))
+        return cls(
+            audio=audio,
+            sample_rate=sample_rate,
+            meta=dict(arrangement.meta),
+            loop_start_sample=start,
+            loop_end_sample=end,
+        )
 
 
 def render(arrangement: Arrangement, sample_rate: int = SAMPLE_RATE) -> np.ndarray:
