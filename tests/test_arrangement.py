@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from bitty.arrangement import Arrangement, Channel, Echo, Event, Instrument, Loop
+from bitty.arrangement import ARP_RATE_SEC, Arrangement, Channel, Echo, Event, Instrument, Loop
 
 
 def sample_arrangement() -> Arrangement:
@@ -172,3 +172,36 @@ def test_an_event_field_this_build_does_not_know_is_dropped_not_fatal():
     )
     restored = Arrangement.from_json(text)
     assert restored.channels[0].events[0].pitch == 60
+
+
+def test_an_event_carries_no_arpeggio_by_default():
+    assert Event(t=0.0, pitch=60, dur=1.0, vel=15).arp == ()
+
+
+def test_an_arpeggio_survives_the_json_round_trip_as_a_tuple():
+    """A list would break Event's hashing and equality; it is frozen."""
+    event = Event(t=0.0, pitch=60, dur=1.0, vel=15, arp=(0, 4, 7))
+    channel = Channel(role="lead", instrument=Instrument(wave="pulse"), events=(event,))
+    restored = Arrangement.from_json(
+        Arrangement(meta={"title": "t", "bpm": 120.0}, channels=(channel,)).to_json()
+    )
+    loaded = restored.channels[0].events[0]
+    assert loaded.arp == (0, 4, 7)
+    assert isinstance(loaded.arp, tuple)
+
+
+def test_an_unknown_event_field_is_still_dropped():
+    """The contract that keeps a newer bitty's file loadable in an older one."""
+    raw = '''{"meta": {"title": "t", "bpm": 120.0}, "channels": [{"role": "lead",
+      "instrument": {"wave": "pulse"},
+      "events": [{"t": 0.0, "pitch": 60, "dur": 1.0, "vel": 15,
+                  "arp": [0, 7], "glissando": 3}]}]}'''
+    event = Arrangement.from_json(raw).channels[0].events[0]
+    assert event.arp == (0, 7)
+
+
+def test_an_instrument_carries_the_default_arp_rate():
+    """The rate travels in the arrangement for the reason vibrato's does:
+    a hand-edited file must render the same with no config anywhere."""
+    assert Instrument(wave="pulse").arp_rate_sec == ARP_RATE_SEC
+    assert ARP_RATE_SEC == 0.016

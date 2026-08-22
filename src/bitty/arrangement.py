@@ -19,6 +19,7 @@ MAX_VELOCITY = 15
 VIBRATO_CENTS = 25.0
 VIBRATO_DELAY = 0.3
 VIBRATO_RATE_HZ = 5.5
+ARP_RATE_SEC = 0.016  # seconds per cycle step; the classic hardware rate
 
 
 @dataclass(frozen=True)
@@ -28,6 +29,7 @@ class Event:
     dur: float  # seconds
     vel: int  # 0-15
     vibrato: bool = False  # a delayed LFO on the pitch; see lfo.py
+    arp: tuple[int, ...] = ()  # semitone offsets from `pitch`, cycling; () is none
 
 
 @dataclass(frozen=True)
@@ -48,6 +50,7 @@ class Instrument:
     vibrato_cents: float = VIBRATO_CENTS  # depth of the sustain LFO
     vibrato_delay: float = VIBRATO_DELAY  # seconds of silence before it fades in
     vibrato_rate_hz: float = VIBRATO_RATE_HZ  # oscillations per second, once it fades in
+    arp_rate_sec: float = ARP_RATE_SEC  # seconds per arpeggio step
 
 
 @dataclass(frozen=True)
@@ -115,7 +118,10 @@ def _event_from(raw: dict) -> Event:
     field should not turn every older build into a hard failure on load.
     """
     known = {f.name for f in fields(Event)}
-    return Event(**{k: v for k, v in raw.items() if k in known})
+    kwargs = {k: v for k, v in raw.items() if k in known}
+    if "arp" in kwargs:
+        kwargs["arp"] = tuple(kwargs["arp"])
+    return Event(**kwargs)
 
 
 def _loop_from(raw: dict | None) -> Loop | None:
