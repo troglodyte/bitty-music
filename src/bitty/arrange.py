@@ -20,13 +20,7 @@ from itertools import groupby
 from bitty.arrangement import MAX_VELOCITY, Arrangement, Channel, Echo, Event
 from bitty.config import DEFAULTS, Config, EchoSettings
 from bitty.model import Note, Score
-from bitty.voices import (
-    ARP_ROLE,
-    BASS_ROLE,
-    LEAD_ROLE,
-    MIDDLE_ROLES,
-    Voice,
-)
+from bitty.voices import Roster
 
 EPSILON = 1e-6  # onset times are floats; anything closer than this is one moment
 ARP_STEP_SEC = DEFAULTS.arp.step_sec  # kept: tests and goldens read this name
@@ -51,11 +45,12 @@ Tracks = dict[str, list[_Take]]
 
 
 def arrange(score: Score, config: Config = DEFAULTS) -> Arrangement:
-    tracks, leftovers = _assign(score, config.voices)
-    tracks[ARP_ROLE] = _arpeggiate(leftovers, tracks[ARP_ROLE], config.arp.step_sec)
+    roster = config.voices
+    tracks, leftovers = _assign(score, roster)
+    tracks[roster.arp] = _arpeggiate(leftovers, tracks[roster.arp], config.arp.step_sec)
 
     channels: list[Channel] = []
-    for voice in config.voices:
+    for voice in roster:
         events = _events(tracks[voice.role], config.vibrato.min_note_sec)
         if not events:
             continue  # a two-voice score should not carry three silent channels
@@ -65,7 +60,7 @@ def arrange(score: Score, config: Config = DEFAULTS) -> Arrangement:
                 instrument=voice.instrument,
                 events=events,
                 pan=voice.pan,
-                echo=_echo(score.bpm, config.echo) if voice.role == LEAD_ROLE else None,
+                echo=_echo(score.bpm, config.echo) if voice.role == roster.lead else None,
             )
         )
 
@@ -87,26 +82,26 @@ def _echo(bpm: float, settings: EchoSettings) -> Echo | None:
     return Echo(delay_sec=settings.delay_beats * 60.0 / bpm, level=settings.level)
 
 
-def _assign(score: Score, roster: tuple[Voice, ...]) -> tuple[Tracks, list[tuple[float, list[Note]]]]:
+def _assign(score: Score, roster: Roster) -> tuple[Tracks, list[tuple[float, list[Note]]]]:
     tracks: Tracks = {voice.role: [] for voice in roster}
     leftovers: list[tuple[float, list[Note]]] = []
 
     for onset, group in _by_onset(score.notes):
         used: set[str] = set()
         pending = list(group)
-        above = _texture(tracks, onset, without=LEAD_ROLE)
+        above = _texture(tracks, onset, without=roster.lead)
         if not above or pending[0].pitch >= max(above):
-            _place(tracks[LEAD_ROLE], pending.pop(0))
-            used.add(LEAD_ROLE)
+            _place(tracks[roster.lead], pending.pop(0))
+            used.add(roster.lead)
 
-        below = _texture(tracks, onset, without=BASS_ROLE)
+        below = _texture(tracks, onset, without=roster.bass)
         if pending and (not below or pending[-1].pitch <= min(below)):
-            _place(tracks[BASS_ROLE], pending.pop())
-            used.add(BASS_ROLE)
+            _place(tracks[roster.bass], pending.pop())
+            used.add(roster.bass)
 
         spare: list[Note] = []
         for note in pending:
-            role = _pick_middle(tracks, onset, note, used)
+            role = _pick_middle(tracks, onset, note, used, roster.middles)
             if role is None:
                 spare.append(note)
                 continue
@@ -174,14 +169,16 @@ def _last_pitch(takes: list[_Take]) -> int | None:
     return takes[-1].pitch if takes else None
 
 
-def _pick_middle(tracks: Tracks, onset: float, note: Note, used: set[str]) -> str | None:
+def _pick_middle(
+    tracks: Tracks, onset: float, note: Note, used: set[str], middles: tuple[str, ...]
+) -> str | None:
     """Nearest last pitch, but only among channels that are not mid-note.
 
     Stealing is the fallback rather than the rule. A held inner voice cut short
     leaves a hole in the harmony, which the ear reads as the texture breaking;
     a note landing on a further-away channel is only a change of colour.
     """
-    options = [role for role in MIDDLE_ROLES if role not in used]
+    options = [role for role in middles if role not in used]
     if not options:
         return None
     free = [role for role in options if _sounding(tracks[role], onset) is None]

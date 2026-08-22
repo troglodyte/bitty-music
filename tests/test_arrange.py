@@ -358,10 +358,11 @@ def test_the_echo_level_and_delay_come_from_config():
 
 def test_a_reshaped_voice_reaches_the_channel_it_names():
     score = ingest(FIXTURE)
-    roster = tuple(
+    reshaped = tuple(
         replace(v, instrument=replace(v.instrument, duty=0.125)) if v.role == "lead" else v
-        for v in DEFAULTS.voices
+        for v in DEFAULTS.voices.voices
     )
+    roster = replace(DEFAULTS.voices, voices=reshaped)
     lead = next(c for c in arrange(score, replace(DEFAULTS, voices=roster)).channels if c.role == "lead")
     assert lead.instrument.duty == 0.125
 
@@ -385,3 +386,49 @@ def test_the_arpeggio_step_comes_from_config():
 def test_the_default_argument_still_arranges():
     score = ingest(FIXTURE)
     assert arrange(score) == arrange(score, DEFAULTS)
+
+
+def roster_of(count):
+    return replace(DEFAULTS, voices=replace(DEFAULTS.voices, count=count))
+
+
+def test_three_voices_play_only_lead_counter_and_bass():
+    arrangement = arrange(
+        score_of(note(72, 0.0), note(69, 0.0), note(67, 0.0), note(64, 0.0), note(48, 0.0)),
+        roster_of(3),
+    )
+    assert set(channels(arrangement)) == {"lead", "counter", "bass"}
+    assert pitches(arrangement, "lead") == [72]
+    assert pitches(arrangement, "bass") == [48]
+
+
+def test_the_notes_a_dropped_voice_would_have_taken_reach_the_arpeggio():
+    """The test that excludes the coarse implementation.
+
+    Simply deleting channels after arranging also yields three channels —
+    and silently loses 69, 67, and 64. The overflow has to arrive on the
+    carrier, which at count 3 is the counter.
+    """
+    arrangement = arrange(
+        score_of(note(72, 0.0), note(69, 0.0), note(67, 0.0), note(64, 0.0), note(48, 0.0)),
+        roster_of(3),
+    )
+    carried = pitches(arrangement, "counter")
+    assert set(carried) == {69, 67, 64}
+    assert len(carried) > 3, "a cycle, not one note that happened to fit"
+
+
+def test_four_voices_drop_only_inner_b_and_carry_on_inner_a():
+    arrangement = arrange(
+        score_of(note(72, 0.0), note(69, 0.0), note(67, 0.0), note(64, 0.0), note(48, 0.0)),
+        roster_of(4),
+    )
+    assert set(channels(arrangement)) == {"lead", "counter", "inner_a", "bass"}
+    assert 64 in pitches(arrangement, "inner_a")
+
+
+def test_the_echo_follows_the_lead_at_every_count():
+    for count in (3, 4, 5):
+        arrangement = arrange(score_of(note(72, 0.0), note(48, 0.0)), roster_of(count))
+        with_echo = [c.role for c in arrangement.channels if c.echo is not None]
+        assert with_echo == ["lead"]

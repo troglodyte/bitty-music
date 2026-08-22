@@ -114,10 +114,5 @@ class Roster:
 
 ROSTER = Roster()
 
-LEAD_ROLE = LEAD.role
-BASS_ROLE = BASS.role
-MIDDLE_ROLES = (COUNTER.role, INNER_A.role, INNER_B.role)
-ARP_ROLE = INNER_B.role  # the narrowest pulse carries the overflow
-
 ECHO_BEATS = 0.75  # the spec's [echo] delay = "3/16" of a whole note
 ECHO_LEVEL = 0.35
