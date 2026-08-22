@@ -289,6 +289,14 @@ def test_incoherent_summing_stays_loud_across_voice_counts():
     at synth.py:88 holds output level nearly constant. This guards against
     regression to a fixed divisor, which would produce output proportional to
     sqrt(N) and grow ~58% from N=2 to N=5.
+
+    vel=4 is deliberate, not incidental: at vel=15 the mix drives deep into
+    the tanh soft clipper (synth.py:105), which compresses the very spread
+    this test measures and lets several wrong gain laws slip under a loose
+    threshold. At vel=4 the clipper stays out of the picture and the spread
+    tracks the gain law honestly. Measured spread with correct gain is
+    ~1.005x; a fixed-divisor break (gain = MIX_HEADROOM, no sqrt) measures
+    ~1.48x.
     """
     levels = {}
     for count in (2, 3, 4, 5):
@@ -298,7 +306,7 @@ def test_incoherent_summing_stays_loud_across_voice_counts():
             Channel(
                 role=f"v{i}",
                 instrument=Instrument(wave="pulse", duty=0.5),
-                events=(Event(t=0.0, pitch=60 + i, dur=1.0, vel=15),),
+                events=(Event(t=0.0, pitch=60 + i, dur=1.0, vel=4),),
             )
             for i in range(count)
         )
@@ -307,10 +315,11 @@ def test_incoherent_summing_stays_loud_across_voice_counts():
         levels[count] = float(np.sqrt(np.mean(audio**2)))
 
     # With sqrt(n) compensation, the levels should stay roughly constant.
-    # The spread from min to max should be well below the ~1.58x that a fixed
-    # divisor would produce. Measured spread with correct gain is ~1.27x.
+    # Correct gain measures ~1.005x; every broken divisor tried (a fixed
+    # constant, /2, /sqrt(5), /5) measures 1.47x or higher at this velocity.
+    # 1.2 sits with clear headroom on both sides.
     ratio = max(levels.values()) / min(levels.values())
-    assert ratio < 1.35, f"levels spread {ratio:.2f}x across {sorted(levels.keys())} channels"
+    assert ratio < 1.2, f"levels spread {ratio:.2f}x across {sorted(levels.keys())} channels"
 
 
 def test_count_path_smoke_check_three_voices():
