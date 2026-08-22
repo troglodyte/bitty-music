@@ -1,5 +1,7 @@
 from dataclasses import replace
 
+import pytest
+
 from bitty.voices import MIN_VOICES, ROSTER, VOICES, Roster
 
 
@@ -66,6 +68,19 @@ def test_the_arp_carrier_is_always_a_voice_that_plays():
         roster = replace(ROSTER, count=count)
         assert roster.arp in {v.role for v in roster}
         assert roster.middles, "an empty middles has no one to carry the overflow"
+
+
+def test_arp_fails_loudly_below_the_legal_range():
+    """`Roster` does not re-check the 3-5 bound — that is the config
+    validator's job — but a hand-built out-of-range roster must not hand
+    back something plausible either. Below count 2 there is no middle
+    voice, so `.arp` must blow up rather than quietly naming a voice that
+    was never meant to carry the overflow."""
+    for count in (0, 1, 2):
+        roster = replace(ROSTER, count=count)
+        assert roster.middles == ()
+        with pytest.raises(IndexError):
+            roster.arp
 
 
 def test_truncation_is_a_view_not_a_deletion():

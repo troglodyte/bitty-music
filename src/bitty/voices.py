@@ -1,4 +1,6 @@
-"""The five-voice roster: who plays, with what timbre, and where in the image.
+"""The chiptune roster: who plays, with what timbre, and where in the image.
+
+Five voices declared, three to five active — `[voices] count` narrows it.
 
 Data, not policy. This is the table Phase 5's config work overrides, so the
 arranger reads it and never hard-codes an instrument or a pan.
@@ -109,7 +111,15 @@ class Roster:
         # before inner_a (0.25), so the widest, most present middle voice
         # survives longest. Width is the rule; that it coincides with
         # reverse declaration order is what makes the slice cheap.
-        return self.voices[1:-1][: self.count - 2]
+        #
+        # max(..., 0) matters below the legal range: a bare `count - 2`
+        # goes negative for count < 2, and Python reads a negative slice
+        # bound from the right rather than as "stop at zero" — silently
+        # handing back voices instead of the empty tuple `.arp` needs to
+        # fail loudly on. The 3-5 bound itself still lives in the config
+        # validator only; this is just keeping the slice honest at the
+        # values the validator does not let through.
+        return self.voices[1:-1][: max(self.count - 2, 0)]
 
 
 ROSTER = Roster()
