@@ -219,10 +219,50 @@ and whether the harmony still reads.
   import working, but a misread of the two at a call site is a plausible
   mistake that the type checker will not always catch.
 
+## Audition outcome (2026-08-22) — `nes-tight` ships at 4, not 3
+
+The audition rejected `count = 3`. It sounds harsh, and the cause is
+structural rather than a matter of taste.
+
+At three voices there is exactly one middle voice, so `_pick_middle` can
+place at most one note per onset and every other simultaneous note falls
+through to `_arpeggiate`. Measured arpeggio-carrier events:
+
+| fixture | count 5 | count 4 | count 3 |
+|---------|---------|---------|---------|
+| minuet | 25 | 35 | 819 (16.7% of notes overflow) |
+| chorale | 23 | 39 | 911 (25.0%) |
+| ragtime | 178 | 383 | 524 (24.9%) |
+
+On the minuet that is 26 overflowed notes becoming 819 sixteen-millisecond
+steps, sounding 80.6% of the piece on the duty-0.125 pulse — a
+near-continuous trill, not a line. Soft-clipper saturation was ruled out
+(peak 1.05, no samples above 1.0, *less* saturated than the default preset
+at count 5, which already ships), as was the mono image.
+
+The arpeggio was designed as an occasional overflow valve — its docstring
+calls it notes "that found no channel". At counts 4 and 5 it never fires at
+all on minuet and chorale. At 3 it becomes the primary texture. **The "Risks"
+section above understated this by an order of magnitude**: it predicted the
+carrier might sound busy, and named `nes-tight` at 4 as the fallback. The
+fallback was the right call; the estimate of the risk was not.
+
+**`nes-tight` therefore ships at `count = 4`.** That is lead, counter,
+inner_a, and bass — three pulses and a triangle, which no NES can do. The
+name still overclaims, less than before. The section above claiming three is
+the honest roster remains true about the hardware and untrue about what
+ships; this record is the authority where they disagree.
+
+`count = 3` stays legal, documented, and carries a README caveat. Making it
+musical is arranger work — spreading across onsets, or letting a lone middle
+voice steal a held note rather than overflowing — and belongs to its own
+phase with its own audition.
+
 ## What a later phase inherits
 
 - A roster whose membership is data, which is what a noise voice would
   need.
 - `.arp` as a derived property, so an overflow policy change has one
   place to live.
-- `[transform]` and tail-wrapping, both still ahead.
+- `[transform]` and tail-wrapping, both still ahead, now joined by a
+  musical `count = 3`.
