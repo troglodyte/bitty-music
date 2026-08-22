@@ -1,6 +1,10 @@
-# Close to the hardware: no echo, a mono image, shallow late vibrato, and
-# envelopes that decay rather than sit. The name overclaims slightly — without
-# [voices] count this cannot drop to four channels, so it changes timbre only.
+# Close to the hardware: three channels, no echo, a mono image, shallow late
+# vibrato, and envelopes that decay rather than sit. Two pulses and a triangle
+# is the NES melodic roster; its remaining channels are noise and DPCM, which
+# this roster has no voice for.
+
+[voices]
+count = 3
 
 [echo]
 on = false
@@ -16,14 +20,6 @@ pan = 0.0
 [voices.counter]
 duty = 0.125
 volume_env = [12, 11, 9, 8, 7, 7]
-pan = 0.0
-
-[voices.inner_a]
-volume_env = [11, 9, 8, 7, 7]
-pan = 0.0
-
-[voices.inner_b]
-volume_env = [11, 9, 8, 7, 7]
 pan = 0.0
 
 [voices.bass]

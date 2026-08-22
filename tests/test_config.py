@@ -292,6 +292,22 @@ def test_nes_tight_turns_the_echo_off_and_centres_the_image():
         assert voice.instrument.vibrato_delay == 0.42
 
 
+def test_nes_tight_is_two_pulses_and_a_triangle():
+    """The real NES melodic roster. Its other channels are noise and DPCM,
+    which this roster has no voice for."""
+    result = load([], preset="nes-tight")
+    assert [v.role for v in result.voices] == ["lead", "counter", "bass"]
+    waves = [v.instrument.wave for v in result.voices]
+    assert waves == ["pulse", "pulse", "triangle"]
+
+
+def test_nes_tight_carries_its_overflow_on_the_narrow_pulse():
+    result = load([], preset="nes-tight")
+    by_role = {v.role: v for v in result.voices}
+    assert result.voices.arp == "counter"
+    assert by_role["counter"].instrument.duty == 0.125
+
+
 def test_lush_widens_the_image_and_deepens_the_vibrato():
     result = load([], preset="lush")
     assert result.echo.on is True
