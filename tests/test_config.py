@@ -42,6 +42,54 @@ from bitty.config import ConfigError, merge
 from dataclasses import replace
 
 
+def test_count_narrows_the_roster():
+    result = merge(DEFAULTS, "[voices]\ncount = 3\n", "test")
+    assert [v.role for v in result.voices] == ["lead", "counter", "bass"]
+    assert result.voices.arp == "counter"
+
+
+def test_count_is_bounded_at_both_ends():
+    for bad in (2, 6, 0, -1):
+        with pytest.raises(ConfigError) as caught:
+            merge(DEFAULTS, f"[voices]\ncount = {bad}\n", "test")
+        assert "voices.count" in str(caught.value)
+
+
+def test_count_rejects_a_non_integer():
+    for bad in ("3.5", "true", '"three"'):
+        with pytest.raises(ConfigError) as caught:
+            merge(DEFAULTS, f"[voices]\ncount = {bad}\n", "test")
+        assert "voices.count" in str(caught.value)
+
+
+def test_the_last_file_to_name_count_wins():
+    once = merge(DEFAULTS, "[voices]\ncount = 3\n", "first")
+    twice = merge(once, "[voices]\ncount = 4\n", "second")
+    assert twice.voices.count == 4
+    assert twice.voices.arp == "inner_a"
+
+
+def test_a_file_that_is_silent_on_count_leaves_it_alone():
+    once = merge(DEFAULTS, "[voices]\ncount = 3\n", "first")
+    twice = merge(once, "[voices.lead]\npan = 0.0\n", "second")
+    assert twice.voices.count == 3
+
+
+def test_overriding_a_dropped_voice_is_accepted_and_moot():
+    """Independent layers must not combine into an error. A project file
+    tweaking inner_b does not break the day someone adds --preset nes-tight."""
+    result = merge(DEFAULTS, "[voices]\ncount = 3\n[voices.inner_b]\nduty = 0.5\n", "test")
+    assert [v.role for v in result.voices] == ["lead", "counter", "bass"]
+    by_role = {v.role: v for v in result.voices.voices}
+    assert by_role["inner_b"].instrument.duty == 0.5
+
+
+def test_an_unknown_voice_still_errors_next_to_count():
+    with pytest.raises(ConfigError) as caught:
+        merge(DEFAULTS, "[voices]\ncount = 3\n[voices.tuba]\nduty = 0.5\n", "test")
+    assert "tuba" in str(caught.value)
+
+
 def test_the_roster_survives_a_merge_as_a_roster():
     """A merged config still answers .arp, or the arranger loses its carrier."""
     result = merge(DEFAULTS, '[voices.lead]\nduty = 0.25\n', "test")

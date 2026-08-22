@@ -20,7 +20,7 @@ from pathlib import Path
 
 from bitty.arrangement import MAX_VELOCITY, VIBRATO_CENTS, VIBRATO_DELAY, VIBRATO_RATE_HZ
 from bitty.lfo import MIN_NOTE_SEC
-from bitty.voices import ECHO_BEATS, ECHO_LEVEL, ROSTER, Roster
+from bitty.voices import ECHO_BEATS, ECHO_LEVEL, MIN_VOICES, ROSTER, VOICES, Roster
 
 
 @dataclass(frozen=True)
@@ -284,11 +284,17 @@ def _spread(roster, vibrato, named):
 
 
 def _voices(roster, raw, source):
-    by_role = {voice.role: voice for voice in roster.voices}
     if not isinstance(raw, dict):
         raise ConfigError(source, "voices", "expected tables like [voices.lead]")
 
-    for role, body in raw.items():
+    bodies = dict(raw)
+    count = bodies.pop("count", None)
+    if count is not None:
+        count = _whole(low=MIN_VOICES, high=len(VOICES))(count, source, "voices.count")
+
+    by_role = {voice.role: voice for voice in roster.voices}
+
+    for role, body in bodies.items():
         if role not in by_role:
             raise ConfigError(
                 source,
@@ -318,7 +324,12 @@ def _voices(roster, raw, source):
             **voice_changes,
         )
 
-    return replace(roster, voices=tuple(by_role[voice.role] for voice in roster.voices))
+    narrowed = {"count": count} if count is not None else {}
+    return replace(
+        roster,
+        voices=tuple(by_role[voice.role] for voice in roster.voices),
+        **narrowed,
+    )
 
 
 def merge(config: Config, text: str, source: str) -> Config:
