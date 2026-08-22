@@ -3,10 +3,10 @@
 from dataclasses import replace
 from pathlib import Path
 
-import soundfile as sf
 import typer
 
 from bitty import loop as loop_stage
+from bitty import targets
 from bitty.analyze import analyze
 from bitty.arrange import arrange
 from bitty.arrangement import Arrangement
@@ -151,16 +151,7 @@ def render(
 
 
 def _write_audio(audio, out_dir: Path, stem: str, wav: bool) -> Path:
-    out_dir.mkdir(parents=True, exist_ok=True)
-    path = out_dir / f"{stem}{'.wav' if wav else '.ogg'}"
-
-    if wav:
-        sf.write(path, audio, SAMPLE_RATE)
-    else:
-        sf.write(path, audio, SAMPLE_RATE, format="OGG", subtype="VORBIS")
-
-    typer.echo(f"{path}  ({len(audio) / SAMPLE_RATE:.1f}s)")
-    return path
+    return targets.write_audio(audio, out_dir, stem, "wav" if wav else "ogg")
 
 
 def _write_split(audio, arrangement: Arrangement, out_dir: Path, stem: str, wav: bool) -> None:
