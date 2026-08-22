@@ -15,6 +15,7 @@ asserts the copies agree.
 
 import tomllib
 from dataclasses import dataclass, replace
+from importlib import resources
 from pathlib import Path
 
 from bitty.arrangement import MAX_VELOCITY, VIBRATO_CENTS, VIBRATO_DELAY, VIBRATO_RATE_HZ
@@ -334,3 +335,36 @@ def merge(config: Config, text: str, source: str) -> Config:
     if "voices" in raw:
         roster = _voices(roster, raw["voices"], source)
     return replace(config, voices=roster)
+
+
+PRESET_DIR = "presets"
+
+
+def preset_names() -> tuple[str, ...]:
+    """The shipped presets. The directory is the list, like TARGETS is for targets."""
+    folder = resources.files("bitty") / PRESET_DIR
+    return tuple(
+        sorted(
+            item.name.removesuffix(".toml")
+            for item in folder.iterdir()
+            if item.name.endswith(".toml")
+        )
+    )
+
+
+def _preset_text(name: str) -> str:
+    if name not in preset_names():
+        raise ConfigError(
+            f"preset {name}", "", f"unknown preset; try one of {', '.join(preset_names())}"
+        )
+    return (resources.files("bitty") / PRESET_DIR / f"{name}.toml").read_text()
+
+
+def load(paths: list[Path], preset: str | None = None) -> Config:
+    """Defaults, then the preset, then each file in order. Later wins."""
+    config = DEFAULTS
+    if preset is not None:
+        config = merge(config, _preset_text(preset), f"preset {preset}")
+    for path in paths:
+        config = merge(config, path.read_text(), str(path))
+    return config

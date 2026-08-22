@@ -1,0 +1,28 @@
+# The other direction: a longer, louder echo, a wide image, and vibrato that
+# arrives early enough to sing on ordinary phrase-length notes.
+
+[echo]
+level = 0.5
+delay_beats = 1.0
+
+[vibrato]
+depth_cents = 40.0
+delay_ms = 220
+min_note_ms = 350
+
+[voices.lead]
+volume_env = [15, 15, 15, 14, 14, 13, 13, 13]
+pan = -0.35
+vibrato_cents = 55.0
+
+[voices.counter]
+pan = 0.65
+
+[voices.inner_a]
+pan = -0.65
+
+[voices.inner_b]
+pan = 0.35
+
+[voices.bass]
+volume_env = [15, 15, 14, 13, 13]

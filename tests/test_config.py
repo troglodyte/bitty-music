@@ -171,3 +171,56 @@ def test_a_file_with_no_vibrato_table_leaves_per_voice_overrides_alone():
 def test_per_voice_vibrato_delay_is_milliseconds_like_every_other_delay():
     result = merge(DEFAULTS, "[voices.lead]\nvibrato_delay_ms = 500\n", "x")
     assert roles(result)["lead"].instrument.vibrato_delay == 0.5
+
+
+from bitty.config import load, preset_names
+
+
+def test_a_later_file_beats_an_earlier_one(tmp_path):
+    first = tmp_path / "a.toml"
+    second = tmp_path / "b.toml"
+    first.write_text("[echo]\nlevel = 0.1\ndelay_beats = 0.5\n")
+    second.write_text("[echo]\nlevel = 0.9\n")
+    result = load([first, second])
+    assert result.echo.level == 0.9, "the later file wins the key it sets"
+    assert result.echo.delay_beats == 0.5, "and leaves the rest of the earlier one"
+
+
+def test_a_file_beats_the_preset_it_started_from(tmp_path):
+    override = tmp_path / "bitty.toml"
+    override.write_text("[echo]\non = true\n")
+    assert load([override], preset="nes-tight").echo.on is True
+
+
+def test_both_presets_ship_and_load():
+    assert set(preset_names()) == {"lush", "nes-tight"}
+    for name in preset_names():
+        load([], preset=name)
+
+
+def test_nes_tight_turns_the_echo_off_and_centres_the_image():
+    result = load([], preset="nes-tight")
+    assert result.echo.on is False
+    assert all(voice.pan == 0.0 for voice in result.voices), "mono hardware, mono image"
+
+
+def test_lush_widens_the_image_and_deepens_the_vibrato():
+    result = load([], preset="lush")
+    assert result.echo.on is True
+    assert max(abs(voice.pan) for voice in result.voices) > 0.5
+    assert result.vibrato.depth_cents > DEFAULTS.vibrato.depth_cents
+
+
+def test_the_two_presets_actually_differ():
+    assert load([], preset="lush") != load([], preset="nes-tight")
+
+
+def test_an_unknown_preset_lists_the_ones_that_exist():
+    with pytest.raises(ConfigError) as caught:
+        load([], preset="chunky")
+    assert "chunky" in str(caught.value)
+    assert "nes-tight" in str(caught.value)
+
+
+def test_loading_nothing_is_the_defaults():
+    assert load([]) == DEFAULTS
