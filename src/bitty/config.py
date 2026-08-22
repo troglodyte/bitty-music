@@ -93,14 +93,20 @@ class ConfigError(Exception):
         super().__init__(f"{where}{message}")
 
 
-def _number(value, source, key_path, *, low=None, high=None):
-    # bool is a subclass of int, so `level = true` would otherwise pass as 1.
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise ConfigError(source, key_path, f"expected a number, got {value!r}")
+def _check_range(value, source, key_path, low, high):
+    # Shared by _number and _whole: same bounds check, same wording, one site
+    # to change either.
     if low is not None and value < low:
         raise ConfigError(source, key_path, f"expected at least {low}, got {value!r}")
     if high is not None and value > high:
         raise ConfigError(source, key_path, f"expected at most {high}, got {value!r}")
+
+
+def _number(value, source, key_path, *, low=None, high=None):
+    # bool is a subclass of int, so `level = true` would otherwise pass as 1.
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ConfigError(source, key_path, f"expected a number, got {value!r}")
+    _check_range(value, source, key_path, low, high)
     return float(value)
 
 
@@ -124,10 +130,7 @@ def _whole(low=None, high=None):
     def check(value, source, key_path):
         if isinstance(value, bool) or not isinstance(value, int):
             raise ConfigError(source, key_path, f"expected a whole number, got {value!r}")
-        if low is not None and value < low:
-            raise ConfigError(source, key_path, f"expected at least {low}, got {value!r}")
-        if high is not None and value > high:
-            raise ConfigError(source, key_path, f"expected at most {high}, got {value!r}")
+        _check_range(value, source, key_path, low, high)
         return value
 
     return check
