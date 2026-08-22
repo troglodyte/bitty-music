@@ -18,6 +18,7 @@ app = typer.Typer(help="Turn classical scores into chiptune audio.")
 
 ARRANGEMENT_SUFFIX = ".arrangement.json"
 DEFAULT_TARGET = "bevy"
+TARGET_HELP = f"{', '.join(sorted(targets.TARGETS))}."
 
 
 def _emit(
@@ -98,9 +99,7 @@ def convert(
     loop_from: int = typer.Option(
         None, "--loop-from", help="Printed bar the loop starts at. Overrides the cascade."
     ),
-    target: str = typer.Option(
-        DEFAULT_TARGET, "--target", help="bevy, bevy-kira, or generic."
-    ),
+    target: str = typer.Option(DEFAULT_TARGET, "--target", help=TARGET_HELP),
 ) -> None:
     """Convert a score to audio and its arrangement JSON."""
     _check_target(target)
@@ -155,9 +154,7 @@ def render(
     arrangement: Path = typer.Argument(..., exists=True, dir_okay=False, readable=True),
     out_dir: Path = typer.Option(Path("out"), "-o", "--out-dir"),
     wav: bool = typer.Option(False, "--wav", help="Write uncompressed WAV instead of Ogg."),
-    target: str = typer.Option(
-        DEFAULT_TARGET, "--target", help="bevy, bevy-kira, or generic."
-    ),
+    target: str = typer.Option(DEFAULT_TARGET, "--target", help=TARGET_HELP),
 ) -> None:
     """Re-render a hand-edited arrangement, skipping analysis entirely."""
     _check_target(target)

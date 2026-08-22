@@ -65,7 +65,7 @@ two files: the audio, and the arrangement JSON that produced it.
 | `--wav` | Uncompressed WAV instead of Ogg Vorbis. |
 | `--bars N-M` | Keep only printed bars N through M. Times rebase to zero; bar numbers do not. |
 | `--loop-from N` | Start the loop at printed bar N. Overrides the cascade, seam check included. |
-| `--split` | Also write `STEM_intro` and `STEM_loop`. Errors if no loop was found. |
+| `--target NAME` | `bevy` (default), `bevy-kira`, or `generic`. See Targets below. |
 
 ### `bitty render` — edited JSON in, audio out
 
@@ -78,7 +78,7 @@ you want when you are tuning a passage: convert once, then edit the JSON and
 render as often as you like. `foo.arrangement.json` renders to `foo.ogg`, not
 `foo.arrangement.ogg`.
 
-Same `-o`, `--wav`, and `--split` options as `convert`.
+Same `-o`, `--wav`, and `--target` options as `convert`.
 
 ## Looping
 
@@ -126,6 +126,86 @@ else in the file:
 
 No source, no ratio — those are printed at the moment they're decided. The
 hand-edit surface only carries what someone might actually want to change.
+
+## Targets
+
+`--target` picks what gets written alongside the audio, and it is chosen for
+the engine that will load the result, not for the piece.
+
+**`bevy`** is the default. It writes an intro and a loop as two separate
+files, because `bevy_audio` (the rodio-backed built-in) has no seek and no
+loop region — it can only loop a whole file, so the intro has to live
+outside the part that repeats. A loop that starts at 0:00 needs no intro, so
+none is written. A piece with no loop at all is not an error: it comes out
+as a single one-shot file, a `full` entry rather than `intro`/`loop_`.
+
+**`bevy-kira`** writes one whole file plus `loop_start`/`loop_end` in
+seconds, for the `kira` audio backend, which has real loop regions and does
+not need the file split.
+
+`bevy` and `bevy-kira` each write a `name.<target>.ron` fragment — one map
+entry — next to the audio. After every conversion, the fragments in the
+output directory are assembled into `music.ron`. This is a glob, a sort, and
+a concatenation, not a read-modify-write of a shared file, so converting one
+piece can never drop another's entry: nothing ever loads `music.ron` to
+rewrite it.
+
+**`generic`** embeds the loop as `LOOPSTART`/`LOOPLENGTH` Vorbis comments —
+in samples — directly in the Ogg file, the convention Unity and Godot both
+read. It writes no fragment and no `music.ron`; the loop lives entirely in
+the audio file's own tags.
+
+`--wav` is orthogonal to all three targets — it swaps Ogg for uncompressed
+WAV so you can audition through `aplay`, which renders Ogg as static. A WAV
+carries no Vorbis comments, so `generic --wav` writes audio with the loop
+information only in the arrangement JSON sidecar, not in the file itself.
+
+### `music.ron`
+
+```ron
+(
+    tracks: {
+        "minuet": (
+            title: "Minuet in G",
+            intro: "minuet_intro.ogg",
+            loop_: "minuet_loop.ogg",
+            bpm: 88.0,
+            bars: (1, 32),
+        ),
+        "fanfare": (
+            title: "Fanfare",
+            full: "fanfare.ogg",
+            bpm: 120.0,
+            bars: (1, 8),
+        ),
+    },
+)
+```
+
+`loop_` because `loop` is a reserved word in Rust. `bars` is the printed
+range the arrangement covers; it is omitted when the source arrangement
+didn't have one, rather than invented. `title` falls back to the file stem
+and `bpm` to `0.0` when `meta` is missing them — a hand-edited arrangement
+can be missing any key, and a missing one must not crash an emit.
+
+The matching Rust side, to paste straight into the game:
+
+```rust
+#[derive(serde::Deserialize)]
+pub struct MusicManifest {
+    pub tracks: std::collections::HashMap<String, Track>,
+}
+
+#[derive(serde::Deserialize)]
+pub struct Track {
+    pub title: String,
+    #[serde(default)] pub intro: Option<String>,
+    #[serde(default)] pub loop_: Option<String>,
+    #[serde(default)] pub full: Option<String>,
+    pub bpm: f32,
+    #[serde(default)] pub bars: Option<(u32, u32)>,
+}
+```
 
 ## How it works
 
@@ -261,7 +341,9 @@ leading, which is a reason to stop — not to lower the threshold.
 
 Phase 4 is done: ingest, synthesis, the reduction, articulation, structural
 analysis, and looping — the loop cascade, `--bars` and `--loop-from`, and the
-intro/loop split. Phase 5 picks up targets and config.
+intro/loop split. Phase 5a is done: the `Render` contract, the `bevy`,
+`bevy-kira`, and `generic` targets, and `music.ron` assembly. There is no
+config yet — Phase 5b picks up TOML config and presets.
 
 Design documents and per-phase implementation plans live in
 `docs/superpowers/`.
