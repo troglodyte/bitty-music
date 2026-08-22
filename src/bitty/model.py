@@ -16,8 +16,23 @@ class Note:
 
 
 @dataclass(frozen=True)
+class Bar:
+    """One measure as the score prints it, with times resolved to seconds."""
+
+    number: int  # as printed in the score, not renumbered
+    start: float  # seconds from the start of the score
+    dur: float  # seconds
+    time_signature: tuple[int, int]
+    sharps: int  # key signature, -7..7
+    starts_repeat: bool = False  # left barline is a start repeat
+    ends_repeat: bool = False  # right barline is an end repeat
+    ends_span: bool = False  # right barline is final or double
+
+
+@dataclass(frozen=True)
 class Score:
     notes: tuple[Note, ...]
     bpm: float
     time_signature: tuple[int, int]
     title: str
+    bars: tuple[Bar, ...] = ()

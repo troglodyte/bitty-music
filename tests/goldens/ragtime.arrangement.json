@@ -1,7 +1,11 @@
 {
   "meta": {
     "title": "ragtime",
-    "bpm": 100.0
+    "bpm": 100.0,
+    "bars": [
+      1,
+      16
+    ]
   },
   "channels": [
     {
@@ -2977,5 +2981,6 @@
       "pan": 0.0,
       "echo": null
     }
-  ]
+  ],
+  "loop": null
 }

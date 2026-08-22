@@ -71,10 +71,11 @@ def arrange(score: Score) -> Arrangement:
             )
         )
 
-    return Arrangement(
-        meta={"title": score.title, "bpm": score.bpm},
-        channels=tuple(channels),
-    )
+    meta = {"title": score.title, "bpm": score.bpm}
+    if score.bars:
+        meta["bars"] = [score.bars[0].number, score.bars[-1].number]
+
+    return Arrangement(meta=meta, channels=tuple(channels))
 
 
 def _echo(bpm: float) -> Echo:

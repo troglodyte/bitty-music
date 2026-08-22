@@ -7,6 +7,9 @@ from bitty.ingest import ingest
 FIXTURE = Path(__file__).parent / "fixtures" / "two_part.musicxml"
 MINUET = Path(__file__).parent / "fixtures" / "minuet.mxl"
 ORNAMENTS = Path(__file__).parent / "fixtures" / "ornaments.musicxml"
+CHORALE = Path(__file__).parent / "fixtures" / "chorale.mxl"
+RAGTIME = Path(__file__).parent / "fixtures" / "ragtime.mxl"
+LATE_SIGNATURE = Path(__file__).parent / "fixtures" / "late_signature.musicxml"
 
 
 def test_ingest_reads_every_note():
@@ -105,3 +108,66 @@ def test_a_grace_note_borrows_from_its_principal_rather_than_shifting_it():
     principal = next(n for n in score.notes if n.pitch == 77)
     # The principal is written as a quarter, which is 0.5 s at the default 120 bpm.
     assert grace.start + grace.dur + principal.dur == pytest.approx(grace.start + 0.5)
+
+
+def test_ingest_builds_a_bar_timeline():
+    score = ingest(MINUET)
+    assert len(score.bars) == 16
+    assert [b.number for b in score.bars[:3]] == [1, 2, 3]
+
+
+def test_bar_times_follow_the_tempo():
+    """Minuet is 3/4 with no tempo mark, so 120 bpm: three quarters = 1.5 s."""
+    score = ingest(MINUET)
+    assert score.bars[0].start == 0.0
+    assert score.bars[0].dur == 1.5
+    assert score.bars[1].start == 1.5
+    assert score.bars[-1].start == pytest.approx(22.5)
+
+
+def test_bars_carry_the_signatures_forward():
+    """A score states its signatures once; every later bar still has them."""
+    score = ingest(MINUET)
+    assert all(b.time_signature == (3, 4) for b in score.bars)
+    assert all(b.sharps == 1 for b in score.bars)
+
+
+def test_bar_durations_track_the_meter():
+    assert ingest(CHORALE).bars[0].dur == 2.0    # 4/4 at 120
+    assert ingest(RAGTIME).bars[0].dur == 1.2    # 2/4 at 100
+
+
+def test_bars_record_the_repeat_marks():
+    bars = {b.number: b for b in ingest(MINUET).bars}
+    assert bars[8].ends_repeat
+    assert bars[9].starts_repeat
+    assert not bars[1].starts_repeat
+
+
+def test_an_end_repeat_also_reads_as_a_span_end():
+    """music21 gives an end repeat the barline type "final"; both flags set."""
+    assert {b.number: b for b in ingest(MINUET).bars}[8].ends_span
+
+
+def test_ragtime_repeats_bracket_the_whole_strain():
+    bars = {b.number: b for b in ingest(RAGTIME).bars}
+    assert bars[1].starts_repeat
+    assert bars[16].ends_repeat
+
+
+def test_a_score_without_repeat_marks_has_none():
+    assert not any(b.starts_repeat or b.ends_repeat for b in ingest(CHORALE).bars)
+
+
+def test_bars_seed_their_signature_from_the_score_not_a_default():
+    """The fixture states 3/4 and 2 sharps only from bar 2 onward.
+
+    Bar 1 carries no signature of its own, but the piece is in 3/4 with 2
+    sharps throughout — that's what the score actually says, not the 4/4 and
+    0 sharps a hardcoded seed would guess. Seeding from a constant instead of
+    the score would make bar 1 look like it differs from bar 2, when nothing
+    in the notation says the meter or key ever changes.
+    """
+    score = ingest(LATE_SIGNATURE)
+    assert all(b.time_signature == (3, 4) for b in score.bars)
+    assert all(b.sharps == 2 for b in score.bars)

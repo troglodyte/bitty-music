@@ -1,6 +1,7 @@
 import json
+from pathlib import Path
 
-from bitty.arrangement import Arrangement, Channel, Echo, Event, Instrument
+from bitty.arrangement import Arrangement, Channel, Echo, Event, Instrument, Loop
 
 
 def sample_arrangement() -> Arrangement:
@@ -121,6 +122,32 @@ def test_vibrato_round_trips_through_json():
     )
     restored = Arrangement.from_json(original.to_json())
     assert [e.vibrato for e in restored.channels[0].events] == [True, False]
+
+
+def test_a_loop_round_trips_through_json():
+    original = Arrangement(meta={"title": "t", "bpm": 120}, channels=(),
+                           loop=Loop(start_sec=1.5, end_sec=12.0))
+    restored = Arrangement.from_json(original.to_json())
+    assert restored.loop == Loop(start_sec=1.5, end_sec=12.0)
+
+
+def test_an_arrangement_without_a_loop_serializes_it_as_null():
+    text = Arrangement(meta={}, channels=()).to_json()
+    assert '"loop": null' in text
+    assert Arrangement.from_json(text).loop is None
+
+
+def test_a_loop_field_this_build_does_not_know_is_dropped():
+    """The same forgiving-load contract Instrument and Event already keep."""
+    text = '{"meta": {}, "channels": [], "loop": {"start_sec": 0.0, "end_sec": 4.0, "curve": "s"}}'
+    assert Arrangement.from_json(text).loop == Loop(start_sec=0.0, end_sec=4.0)
+
+
+def test_meta_records_the_printed_bar_range():
+    from bitty.arrange import arrange
+    from bitty.ingest import ingest
+    arrangement = arrange(ingest(Path(__file__).parent / "fixtures" / "minuet.mxl"))
+    assert arrangement.meta["bars"] == [1, 16]
 
 
 def test_an_event_field_this_build_does_not_know_is_dropped_not_fatal():

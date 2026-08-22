@@ -4,14 +4,72 @@ from collections import defaultdict
 from dataclasses import replace
 from pathlib import Path
 
-from music21 import chord, converter, dynamics, expressions, key, meter, note, tempo
+from music21 import bar, chord, converter, dynamics, expressions, key, meter, note, stream, tempo
 
-from bitty.model import Note, Score
+from bitty.model import Bar, Note, Score
 
 DEFAULT_BPM = 120.0
 DEFAULT_VELOCITY = 64
 NEUTRAL_BEAT_STRENGTH = 0.5
 GRACE_SEC = 0.032
+SPAN_BARLINES = frozenset({"final", "double"})
+
+
+def _is_repeat(barline, direction: str) -> bool:
+    return isinstance(barline, bar.Repeat) and barline.direction == direction
+
+
+def _ends_span(barline) -> bool:
+    """A final or double bar closes a span.
+
+    A repeat barline carries an ordinary type as well — an end repeat's is
+    "final" — so a bar can both end a repeat and end a span. That overlap is
+    harmless: the two boundary rules collapse to one boundary.
+    """
+    return barline is not None and barline.type in SPAN_BARLINES
+
+
+def _bars(parsed, seconds_per_quarter: float) -> tuple[Bar, ...]:
+    """The bar timeline, read from the first part.
+
+    A score states a time or key signature once, on the measure where it
+    changes, so both carry forward. Reading measures rather than a flattened
+    score matters: flattening reports each signature once per part, at
+    offsets that do not identify a bar.
+
+    The carry-forward seeds from the score's own first signature, not a
+    hardcoded default. A score that states its signature after part 0's
+    first measure — a pickup, or a signature declared on another part —
+    would otherwise show a false change at that bar, opening a section the
+    composer never marked.
+    """
+    if not parsed.parts:
+        return ()
+
+    time_signature = _first_time_signature(parsed)
+    sharps = _first_key_signature(parsed)
+    bars: list[Bar] = []
+    for measure in parsed.parts[0].getElementsByClass(stream.Measure):
+        if measure.timeSignature is not None:
+            time_signature = (
+                int(measure.timeSignature.numerator),
+                int(measure.timeSignature.denominator),
+            )
+        if measure.keySignature is not None:
+            sharps = int(measure.keySignature.sharps)
+        bars.append(
+            Bar(
+                number=int(measure.number),
+                start=float(measure.offset) * seconds_per_quarter,
+                dur=float(measure.quarterLength) * seconds_per_quarter,
+                time_signature=time_signature,
+                sharps=sharps,
+                starts_repeat=_is_repeat(measure.leftBarline, "start"),
+                ends_repeat=_is_repeat(measure.rightBarline, "end"),
+                ends_span=_ends_span(measure.rightBarline),
+            )
+        )
+    return tuple(bars)
 
 
 def ingest(path: str | Path) -> Score:
@@ -54,6 +112,7 @@ def ingest(path: str | Path) -> Score:
         bpm=bpm,
         time_signature=_first_time_signature(parsed),
         title=_title_of(parsed, path),
+        bars=_bars(parsed, seconds_per_quarter),
     )
 
 
@@ -179,6 +238,13 @@ def _first_time_signature(parsed) -> tuple[int, int]:
     for signature in signatures:
         return (int(signature.numerator), int(signature.denominator))
     return (4, 4)
+
+
+def _first_key_signature(parsed) -> int:
+    signatures = parsed.flatten().getElementsByClass(key.KeySignature)
+    for signature in signatures:
+        return int(signature.sharps)
+    return 0
 
 
 def _title_of(parsed, path: Path) -> str:

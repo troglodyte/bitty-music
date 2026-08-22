@@ -21,6 +21,34 @@ This puts a `bitty` command on the path.
 
 ## Commands
 
+### `bitty sections` — what's in the score
+
+```bash
+bitty sections score.mxl
+```
+
+Prints the structure the score's own marks describe, so you can see what
+there is before choosing any of it:
+
+```
+minuet  ·  q=120  ·  16 bars  ·  24.0s
+
+  A   bars   1-8    3/4   G major    0:00.0    12.0s   repeat
+  B   bars   9-16   3/4   D major    0:12.0    12.0s   repeat
+```
+
+Boundaries come only from notation — repeat marks, final and double bars,
+and key or time signature changes — so every one can be traced to something
+a composer wrote. A piece with none of those marks reports as one section,
+which for an eight-bar hymn is the honest answer rather than a failure.
+
+Section names are positional. `A` and `B` mean first and second, not "these
+two are related" — telling repeated material apart needs analysis this
+command deliberately does not do.
+
+The key is detected, not read off the key signature, which is how the minuet
+above shows its second half modulating to the dominant.
+
 ### `bitty convert` — score in, audio out
 
 ```bash
@@ -35,6 +63,9 @@ two files: the audio, and the arrangement JSON that produced it.
 |--------|---------|
 | `-o`, `--out-dir` | Where to write. Default `out`. |
 | `--wav` | Uncompressed WAV instead of Ogg Vorbis. |
+| `--bars N-M` | Keep only printed bars N through M. Times rebase to zero; bar numbers do not. |
+| `--loop-from N` | Start the loop at printed bar N. Overrides the cascade, seam check included. |
+| `--split` | Also write `STEM_intro` and `STEM_loop`. Errors if no loop was found. |
 
 ### `bitty render` — edited JSON in, audio out
 
@@ -47,7 +78,54 @@ you want when you are tuning a passage: convert once, then edit the JSON and
 render as often as you like. `foo.arrangement.json` renders to `foo.ogg`, not
 `foo.arrangement.ogg`.
 
-Same `-o` and `--wav` options as `convert`.
+Same `-o`, `--wav`, and `--split` options as `convert`.
+
+## Looping
+
+A loop track needs a splice point where the audio comes back around, and
+`convert` finds one on its own. `bitty sections` prints what it would pick
+without writing anything, so you can check before you commit to it:
+
+```
+minuet  ·  q=120  ·  16 bars  ·  24.0s
+
+  A   bars   1-8    3/4   G major    0:00.0    12.0s   repeat
+  B   bars   9-16   3/4   D major    0:12.0    12.0s   repeat
+
+  auto-loop pick: bars 1-8  (repeat marks, seam ok)
+```
+
+**The cascade** tries candidates cheapest and most trustworthy first: repeat
+marks (`:||:` in the notation), longest span first — a loop wants the
+substantial repeated body, not an incidental four-bar echo — then section
+boundaries, section *k* through the last section with *k* ascending, so the
+whole piece is offered before any suffix of it. If nothing in either tier
+survives the seam check, there is no loop, and `sections` says so rather than
+guessing. `--loop-from` skips the cascade (and its eight-bar floor) entirely:
+the candidate is bar N to the end, checked but never overruled.
+
+**A candidate is rejected** when the audio's jump across the splice is large
+against how large a jump this piece ordinarily makes — measured, not an
+absolute threshold, so a chip square wave's full-amplitude edges do not read
+as a click — or when the splice severs a dry note, cutting off a note that
+has not finished sounding when the loop restarts.
+
+**The one thing that does not reject is the final note's echo.** The lead
+voice carries an echo tap, and on nearly every candidate across the fixtures
+that tap is still ringing when the loop end arrives — rejecting on it would
+leave two of three fixtures with no loop at all. It is measured, counted, and
+reported instead ("echo tail cut" in the pick line), because whether it's
+audible enough to matter is a call for a person, not a threshold.
+
+A chosen loop lands in `arrangement.json` as two seconds, matching everything
+else in the file:
+
+```json
+"loop": { "start_sec": 0.0, "end_sec": 12.0 }
+```
+
+No source, no ratio — those are printed at the moment they're decided. The
+hand-edit surface only carries what someone might actually want to change.
 
 ## How it works
 
@@ -108,7 +186,7 @@ a passage should not mean navigating a tree.
 
 ```json
 {
-  "meta": { "title": "chorale", "bpm": 120.0 },
+  "meta": { "title": "chorale", "bpm": 120.0, "bars": [1, 8] },
   "channels": [
     {
       "role": "lead",
@@ -127,7 +205,8 @@ a passage should not mean navigating a tree.
         { "t": 0.0, "pitch": 69, "dur": 0.5, "vel": 10, "vibrato": true }
       ]
     }
-  ]
+  ],
+  "loop": { "start_sec": 0.0, "end_sec": 12.0 }
 }
 ```
 
@@ -180,8 +259,9 @@ leading, which is a reason to stop — not to lower the threshold.
 
 ## Status
 
-Phases 1–3b are done: ingest, synthesis, the reduction, and articulation.
-Phase 4 picks up structure — section analysis and looping.
+Phase 4 is done: ingest, synthesis, the reduction, articulation, structural
+analysis, and looping — the loop cascade, `--bars` and `--loop-from`, and the
+intro/loop split. Phase 5 picks up targets and config.
 
 Design documents and per-phase implementation plans live in
 `docs/superpowers/`.
