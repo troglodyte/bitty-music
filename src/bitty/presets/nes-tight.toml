@@ -25,3 +25,17 @@ pan = 0.0
 [voices.bass]
 volume_env = [15, 13, 11, 10]
 pan = 0.0
+
+# inner_a and inner_b are moot at count = 3 — truncation is a view, not a
+# deletion, so these stay addressable in case a later config layer raises
+# the count back up. Deleting them here means an inner voice that comes
+# back reappears un-styled: default envelope, default pan, half-mono image
+# from a preset whose whole point is mono. Keep them styled even though
+# they are silent at this preset's own count.
+[voices.inner_a]
+volume_env = [11, 9, 8, 7, 7]
+pan = 0.0
+
+[voices.inner_b]
+volume_env = [11, 9, 8, 7, 7]
+pan = 0.0
