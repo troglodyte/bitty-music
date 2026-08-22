@@ -121,6 +121,20 @@ def test_a_fragment_is_one_indented_entry(tmp_path):
     assert path.read_text() == '        "piece": (\n            bpm: 120.0,\n        ),\n'
 
 
+def test_the_manifest_opts_into_implicit_some_for_the_rust_side(tmp_path):
+    """`intro`, `loop_`, `full` and `bars` are Options on the Rust side.
+
+    Without this header `ron` rejects a bare value for an Option field with
+    ExpectedOption, so the manifest the README documents fails to load in the
+    consumer it is written for. Verified against ron 0.12 before it was added.
+    """
+    targets._write_fragment(tmp_path, "a", "bevy", targets._entry("a", [("bpm", "1.0")]))
+
+    text = targets.assemble(tmp_path, "bevy").read_text()
+
+    assert text.startswith("#![enable(implicit_some)]\n")
+
+
 def test_assemble_wraps_every_fragment_for_that_target(tmp_path):
     targets._write_fragment(tmp_path, "a", "bevy", targets._entry("a", [("bpm", "1.0")]))
     targets._write_fragment(tmp_path, "b", "bevy", targets._entry("b", [("bpm", "2.0")]))
@@ -129,7 +143,7 @@ def test_assemble_wraps_every_fragment_for_that_target(tmp_path):
 
     assert manifest == tmp_path / "music.ron"
     text = manifest.read_text()
-    assert text.startswith("(\n    tracks: {\n")
+    assert text.startswith(f"{targets.MANIFEST_HEADER}(\n    tracks: {{\n")
     assert text.endswith("    },\n)\n")
     assert '"a": (' in text and '"b": (' in text
 

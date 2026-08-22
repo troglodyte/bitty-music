@@ -37,6 +37,9 @@ def write_audio(
 
 
 MANIFEST_NAME = "music.ron"
+# Without this, `ron` reads a bare value for an Option field as
+# ExpectedOption: `loop_: "x.ogg"` has to be `Some("x.ogg")` otherwise.
+MANIFEST_HEADER = "#![enable(implicit_some)]\n"
 ENTRY_INDENT = " " * 8
 FIELD_INDENT = " " * 12
 
@@ -100,7 +103,7 @@ def assemble(out_dir: Path, target: str) -> Path | None:
 
     body = "".join(fragment.read_text() for fragment in fragments)
     path = out_dir / MANIFEST_NAME
-    path.write_text(f"(\n    tracks: {{\n{body}    }},\n)\n")
+    path.write_text(f"{MANIFEST_HEADER}(\n    tracks: {{\n{body}    }},\n)\n")
     typer.echo(f"{path}")
     return path
 

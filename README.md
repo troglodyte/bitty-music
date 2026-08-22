@@ -163,6 +163,7 @@ information only in the arrangement JSON sidecar, not in the file itself.
 ### `music.ron`
 
 ```ron
+#![enable(implicit_some)]
 (
     tracks: {
         "minuet": (
@@ -181,6 +182,10 @@ information only in the arrangement JSON sidecar, not in the file itself.
     },
 )
 ```
+
+The `implicit_some` header is what lets `intro`, `loop_`, `full` and
+`bars` be written as bare values rather than `Some(...)`; without it `ron`
+rejects the file with `ExpectedOption`.
 
 `loop_` because `loop` is a reserved word in Rust. `bars` is the printed
 range the arrangement covers; it is omitted when the source arrangement
