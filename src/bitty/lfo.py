@@ -11,18 +11,27 @@ attack is the characteristic way this effect goes wrong.
 
 import numpy as np
 
-DEPTH_CENTS = 25.0  # the spec's [vibrato] depth_cents
-DELAY_SEC = 0.3  # the spec's [vibrato] delay_ms
+from bitty.arrangement import VIBRATO_CENTS, VIBRATO_DELAY, VIBRATO_RATE_HZ
+
 MIN_NOTE_SEC = 0.5  # the spec's [vibrato] min_note_ms; the arranger's threshold
-RATE_HZ = 5.5  # not in the spec's config table; a conventional musical rate
 FADE_SEC = 0.15  # a step change in pitch would click
 
 
-def vibrato_cents(length: int, sample_rate: int) -> np.ndarray:
-    """Per-sample pitch offset in cents: silent, then fading in to full depth."""
+def vibrato_cents(
+    length: int,
+    sample_rate: int,
+    depth_cents: float = VIBRATO_CENTS,
+    delay_sec: float = VIBRATO_DELAY,
+    rate_hz: float = VIBRATO_RATE_HZ,
+) -> np.ndarray:
+    """Per-sample pitch offset in cents: silent, then fading in to full depth.
+
+    The shape comes from the instrument now. The defaults are here so a caller
+    that has no instrument — a test, a probe — still gets the house sound.
+    """
     if length <= 0:
         return np.zeros(0, dtype=np.float64)
 
     t = np.arange(length, dtype=np.float64) / sample_rate
-    depth = np.clip((t - DELAY_SEC) / FADE_SEC, 0.0, 1.0) * DEPTH_CENTS
-    return depth * np.sin(2.0 * np.pi * RATE_HZ * t)
+    depth = np.clip((t - delay_sec) / FADE_SEC, 0.0, 1.0) * depth_cents
+    return depth * np.sin(2.0 * np.pi * rate_hz * t)
