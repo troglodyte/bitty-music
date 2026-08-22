@@ -183,19 +183,20 @@ def test_a_bar_range_outside_the_score_is_rejected(tmp_path):
     assert result.exit_code != 0
 
 
-def test_split_writes_an_intro_and_a_loop(tmp_path):
+def test_convert_defaults_to_the_bevy_target(tmp_path):
+    """minuet auto-loops at bar 1, so the loop starts at 0:00 and there is no intro."""
+    result = runner.invoke(app, ["convert", str(MINUET), "-o", str(tmp_path), "--wav"])
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / "minuet_loop.wav").exists()
+    assert (tmp_path / "music.ron").exists()
+    assert (tmp_path / "minuet.arrangement.json").exists()
+
+
+def test_bevy_writes_an_intro_when_the_loop_starts_late(tmp_path):
     result = runner.invoke(
-        app, ["convert", str(MINUET), "-o", str(tmp_path), "--wav", "--split", "--loop-from", "9"]
+        app, ["convert", str(MINUET), "-o", str(tmp_path), "--wav", "--loop-from", "9"]
     )
     assert result.exit_code == 0, result.output
-    assert (tmp_path / "minuet_intro.wav").exists()
-    assert (tmp_path / "minuet_loop.wav").exists()
-
-
-def test_the_split_pieces_have_the_durations_the_loop_names(tmp_path):
-    runner.invoke(
-        app, ["convert", str(MINUET), "-o", str(tmp_path), "--wav", "--split", "--loop-from", "9"]
-    )
     intro, _ = sf.read(tmp_path / "minuet_intro.wav")
     body, _ = sf.read(tmp_path / "minuet_loop.wav")
     assert abs(len(intro) / 44100 - 12.0) < 0.01
@@ -203,34 +204,55 @@ def test_the_split_pieces_have_the_durations_the_loop_names(tmp_path):
 
 
 def test_a_loop_starting_at_zero_writes_no_intro(tmp_path):
-    result = runner.invoke(app, ["convert", str(MINUET), "-o", str(tmp_path), "--wav", "--split"])
+    result = runner.invoke(app, ["convert", str(MINUET), "-o", str(tmp_path), "--wav"])
     assert result.exit_code == 0, result.output
     assert not (tmp_path / "minuet_intro.wav").exists()
-    assert (tmp_path / "minuet_loop.wav").exists()
     assert "no intro" in result.output.lower()
 
 
-def test_split_without_a_loop_is_a_hard_error(tmp_path):
-    """Asking for a split is asking for a loop. A warning here gets missed.
-
-    Checked before any output is written, so a failed --split leaves nothing
-    behind — not a stray .ogg with no .arrangement.json beside it.
-    """
-    result = runner.invoke(app, ["convert", str(FIXTURE), "-o", str(tmp_path), "--split"])
-    assert result.exit_code == 1
-    assert "--loop-from" in result.output
-    assert list(tmp_path.iterdir()) == []
+def test_a_piece_with_no_loop_is_emitted_as_a_one_shot(tmp_path):
+    """4b made this a hard error under --split. The manifest can now say so instead."""
+    result = runner.invoke(app, ["convert", str(FIXTURE), "-o", str(tmp_path), "--wav"])
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / "two_part.wav").exists()
+    assert 'full: "two_part.wav",' in (tmp_path / "music.ron").read_text()
 
 
-def test_render_can_split_a_hand_edited_arrangement(tmp_path):
+def test_the_generic_target_writes_one_file_and_no_manifest(tmp_path):
+    result = runner.invoke(
+        app, ["convert", str(MINUET), "-o", str(tmp_path), "--target", "generic"]
+    )
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / "minuet.ogg").exists()
+    assert not (tmp_path / "music.ron").exists()
+
+
+def test_an_unknown_target_names_the_valid_ones(tmp_path):
+    result = runner.invoke(
+        app, ["convert", str(MINUET), "-o", str(tmp_path), "--target", "snes"]
+    )
+    assert result.exit_code != 0
+    assert "bevy-kira" in result.output
+    assert list(tmp_path.iterdir()) == [], "nothing should be written before the check"
+
+
+def test_render_re_emits_a_hand_edited_arrangement(tmp_path):
     runner.invoke(app, ["convert", str(MINUET), "-o", str(tmp_path), "--loop-from", "9"])
     result = runner.invoke(
         app,
-        ["render", str(tmp_path / "minuet.arrangement.json"), "-o", str(tmp_path),
-         "--wav", "--split"],
+        ["render", str(tmp_path / "minuet.arrangement.json"), "-o", str(tmp_path), "--wav"],
     )
     assert result.exit_code == 0, result.output
     assert (tmp_path / "minuet_loop.wav").exists()
+
+
+def test_converting_a_second_piece_keeps_the_first_in_the_manifest(tmp_path):
+    runner.invoke(app, ["convert", str(MINUET), "-o", str(tmp_path), "--wav"])
+    runner.invoke(app, ["convert", str(CHORALE), "-o", str(tmp_path), "--wav"])
+
+    text = (tmp_path / "music.ron").read_text()
+    assert '"minuet": (' in text
+    assert '"chorale": (' in text
 
 
 def test_sections_prints_the_auto_loop_pick():
