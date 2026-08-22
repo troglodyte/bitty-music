@@ -212,6 +212,11 @@ _VIBRATO_SPREAD = {
     "rate_hz": "vibrato_rate_hz",
 }
 
+# Which [arp] keys land on an instrument, and under what name there. The rate
+# travels in the arrangement for the reason vibrato's shape does: a hand-edited
+# file renders the same with no config anywhere.
+_ARP_SPREAD = {"step_sec": "arp_rate_sec"}
+
 
 # TOML key -> (dataclass field, validator). The two names differ exactly where
 # a unit is converted, which is the only place the file and the code disagree.
@@ -260,20 +265,19 @@ def _table(current, name, raw, source):
     return replace(current, **changes)
 
 
-def _spread(roster, vibrato, named):
-    """Push the [vibrato] keys this file named onto every instrument.
+def _spread(roster, settings, named, mapping):
+    """Push the keys this file named onto every instrument.
 
-    Only the keys it named: spreading all three every time would let a later
-    file with an unrelated [vibrato] table silently undo an earlier
-    [voices.lead] override.
+    Only the keys it named: spreading all of them every time would let a later
+    file with an unrelated table silently undo an earlier [voices.lead]
+    override.
 
     Every voice, including ones the count has dropped. A dropped voice that
-    missed a spread would reappear un-spread if a later layer raised the
-    count.
+    missed a spread would reappear un-spread if a later layer raised the count.
     """
     if not named:
         return roster
-    changes = {_VIBRATO_SPREAD[field]: getattr(vibrato, field) for field in named}
+    changes = {mapping[field]: getattr(settings, field) for field in named}
     return replace(
         roster,
         voices=tuple(
@@ -350,14 +354,16 @@ def merge(config: Config, text: str, source: str) -> Config:
 
     config = replace(config, **changes)
 
-    # Order within one file: the global [vibrato] table sets every voice, then
+    # Order within one file: a global table sets every voice, then
     # [voices.<role>] overrides one. Across files the later file wins.
-    named = [
-        _TABLES["vibrato"][key][0]
-        for key in raw.get("vibrato", {})
-        if _TABLES["vibrato"][key][0] in _VIBRATO_SPREAD
-    ]
-    roster = _spread(config.voices, config.vibrato, named)
+    roster = config.voices
+    for table, mapping in (("vibrato", _VIBRATO_SPREAD), ("arp", _ARP_SPREAD)):
+        named = [
+            _TABLES[table][key][0]
+            for key in raw.get(table, {})
+            if _TABLES[table][key][0] in mapping
+        ]
+        roster = _spread(roster, getattr(config, table), named, mapping)
     if "voices" in raw:
         roster = _voices(roster, raw["voices"], source)
     return replace(config, voices=roster)

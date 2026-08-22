@@ -42,6 +42,38 @@ from bitty.config import ConfigError, merge
 from dataclasses import replace
 
 
+def test_the_arp_rate_reaches_every_instrument():
+    """The synth reads the rate off the instrument, so the TOML must land there."""
+    result = merge(DEFAULTS, "[arp]\nrate_ms = 20\n", "test")
+    assert result.arp.step_sec == 0.02, "the config surface still resolves"
+    for voice in result.voices.voices:
+        assert voice.instrument.arp_rate_sec == 0.02
+
+
+def test_a_file_silent_on_the_arp_rate_leaves_instruments_alone():
+    """Spreading unconditionally would let an unrelated file undo an arp rate edit.
+
+    Unlike vibrato_cents, arp_rate_sec has no _INSTRUMENT_KEYS entry, so we
+    cannot express a per-voice override in TOML. Instead we build the starting
+    config by hand: a lead voice with a non-default rate (0.05, well away from
+    both 0.016 and 0.02). Then we merge an unrelated file that names no [arp]
+    table. Conditional spreading leaves the 0.05 alone; unconditional spreading
+    would overwrite it with the default 0.016.
+    """
+    by_role = {v.role: v for v in DEFAULTS.voices}
+    lead = by_role["lead"]
+    modified_instrument = replace(lead.instrument, arp_rate_sec=0.05)
+    modified_lead = replace(lead, instrument=modified_instrument)
+    modified_voices_tuple = tuple(
+        modified_lead if v.role == "lead" else v for v in DEFAULTS.voices
+    )
+    modified_roster = replace(DEFAULTS.voices, voices=modified_voices_tuple)
+    starting_config = replace(DEFAULTS, voices=modified_roster)
+
+    result = merge(starting_config, "[echo]\nlevel = 0.5\n", "test")
+    assert roles(result)["lead"].instrument.arp_rate_sec == 0.05
+
+
 def test_count_narrows_the_roster():
     result = merge(DEFAULTS, "[voices]\ncount = 3\n", "test")
     assert [v.role for v in result.voices] == ["lead", "counter", "bass"]
