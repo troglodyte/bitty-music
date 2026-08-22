@@ -108,3 +108,66 @@ def test_the_format_key_accepts_only_the_two_it_can_write():
 
 def test_the_out_dir_becomes_a_path():
     assert merge(DEFAULTS, '[output]\ndir = "build/audio"\n', "x").output.dir == Path("build/audio")
+
+
+def roles(config):
+    return {voice.role: voice for voice in config.voices}
+
+
+def test_a_voice_override_reshapes_only_that_voice():
+    result = merge(DEFAULTS, '[voices.lead]\nduty = 0.125\npan = 0.0\n', "bitty.toml")
+    assert roles(result)["lead"].instrument.duty == 0.125
+    assert roles(result)["lead"].pan == 0.0
+    assert roles(result)["counter"] == roles(DEFAULTS)["counter"]
+
+
+def test_the_roster_keeps_its_order_and_its_size():
+    result = merge(DEFAULTS, "[voices.bass]\nquantize = 8\n", "bitty.toml")
+    assert [v.role for v in result.voices] == [v.role for v in DEFAULTS.voices]
+
+
+def test_an_unknown_voice_is_refused_and_lists_the_roster():
+    with pytest.raises(ConfigError) as caught:
+        merge(DEFAULTS, "[voices.strings]\npan = 0.0\n", "bitty.toml")
+    assert "voices.strings" in str(caught.value)
+    assert "lead" in str(caught.value) and "bass" in str(caught.value)
+
+
+def test_an_unknown_voice_key_is_refused():
+    with pytest.raises(ConfigError) as caught:
+        merge(DEFAULTS, "[voices.lead]\nreverb = 0.5\n", "bitty.toml")
+    assert "voices.lead.reverb" in str(caught.value)
+
+
+def test_an_envelope_must_be_levels_in_range():
+    result = merge(DEFAULTS, "[voices.lead]\nvolume_env = [15, 12, 9]\n", "x")
+    assert roles(result)["lead"].instrument.volume_env == (15, 12, 9)
+    with pytest.raises(ConfigError) as caught:
+        merge(DEFAULTS, "[voices.lead]\nvolume_env = [15, 99]\n", "x")
+    assert "volume_env[1]" in str(caught.value)
+
+
+def test_the_global_vibrato_table_spreads_onto_every_voice():
+    result = merge(DEFAULTS, "[vibrato]\ndepth_cents = 40.0\n", "bitty.toml")
+    for voice in result.voices:
+        assert voice.instrument.vibrato_cents == 40.0
+    assert result.vibrato.depth_cents == 40.0, "the arranger's copy moves too"
+
+
+def test_a_per_voice_vibrato_beats_the_global_one_in_the_same_file():
+    text = "[vibrato]\ndepth_cents = 40.0\n\n[voices.lead]\nvibrato_cents = 10.0\n"
+    result = merge(DEFAULTS, text, "bitty.toml")
+    assert roles(result)["lead"].instrument.vibrato_cents == 10.0
+    assert roles(result)["bass"].instrument.vibrato_cents == 40.0
+
+
+def test_a_file_with_no_vibrato_table_leaves_per_voice_overrides_alone():
+    """Spreading only the keys a file names is what keeps layering honest."""
+    first = merge(DEFAULTS, "[voices.lead]\nvibrato_cents = 10.0\n", "a.toml")
+    second = merge(first, "[echo]\nlevel = 0.5\n", "b.toml")
+    assert roles(second)["lead"].instrument.vibrato_cents == 10.0
+
+
+def test_per_voice_vibrato_delay_is_milliseconds_like_every_other_delay():
+    result = merge(DEFAULTS, "[voices.lead]\nvibrato_delay_ms = 500\n", "x")
+    assert roles(result)["lead"].instrument.vibrato_delay == 0.5
