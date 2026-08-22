@@ -39,6 +39,74 @@ def test_the_defaults_describe_the_shipped_behaviour():
 import pytest
 
 from bitty.config import ConfigError, merge
+from dataclasses import replace
+
+
+def test_count_narrows_the_roster():
+    result = merge(DEFAULTS, "[voices]\ncount = 3\n", "test")
+    assert [v.role for v in result.voices] == ["lead", "counter", "bass"]
+    assert result.voices.arp == "counter"
+
+
+def test_count_is_bounded_at_both_ends():
+    for bad in (2, 6, 0, -1):
+        with pytest.raises(ConfigError) as caught:
+            merge(DEFAULTS, f"[voices]\ncount = {bad}\n", "test")
+        assert "voices.count" in str(caught.value)
+
+
+def test_count_rejects_a_non_integer():
+    for bad in ("3.5", "true", '"three"'):
+        with pytest.raises(ConfigError) as caught:
+            merge(DEFAULTS, f"[voices]\ncount = {bad}\n", "test")
+        assert "voices.count" in str(caught.value)
+
+
+def test_the_last_file_to_name_count_wins():
+    once = merge(DEFAULTS, "[voices]\ncount = 3\n", "first")
+    twice = merge(once, "[voices]\ncount = 4\n", "second")
+    assert twice.voices.count == 4
+    assert twice.voices.arp == "inner_a"
+
+
+def test_a_file_that_is_silent_on_count_leaves_it_alone():
+    once = merge(DEFAULTS, "[voices]\ncount = 3\n", "first")
+    twice = merge(once, "[voices.lead]\npan = 0.0\n", "second")
+    assert twice.voices.count == 3
+
+
+def test_overriding_a_dropped_voice_is_accepted_and_moot():
+    """Independent layers must not combine into an error. A project file
+    tweaking inner_b does not break the day someone adds --preset nes-tight."""
+    result = merge(DEFAULTS, "[voices]\ncount = 3\n[voices.inner_b]\nduty = 0.5\n", "test")
+    assert [v.role for v in result.voices] == ["lead", "counter", "bass"]
+    by_role = {v.role: v for v in result.voices.voices}
+    assert by_role["inner_b"].instrument.duty == 0.5
+
+
+def test_an_unknown_voice_still_errors_next_to_count():
+    with pytest.raises(ConfigError) as caught:
+        merge(DEFAULTS, "[voices]\ncount = 3\n[voices.tuba]\nduty = 0.5\n", "test")
+    assert "tuba" in str(caught.value)
+
+
+def test_the_roster_survives_a_merge_as_a_roster():
+    """A merged config still answers .arp, or the arranger loses its carrier."""
+    result = merge(DEFAULTS, '[voices.lead]\nduty = 0.25\n', "test")
+    assert isinstance(result.voices, voices.Roster)
+    assert result.voices.arp == "inner_b"
+
+
+def test_a_vibrato_spread_reaches_voices_that_are_not_playing():
+    """A dropped voice must still be spread: if a later layer raises the
+    count it would otherwise come back without the vibrato."""
+    result = merge(
+        replace(DEFAULTS, voices=replace(DEFAULTS.voices, count=3)),
+        "[vibrato]\ndepth_cents = 40.0\n",
+        "test",
+    )
+    by_role = {v.role: v for v in result.voices.voices}
+    assert by_role["inner_b"].instrument.vibrato_cents == 40.0
 
 
 def test_a_value_from_a_file_beats_the_default():
@@ -222,6 +290,30 @@ def test_nes_tight_turns_the_echo_off_and_centres_the_image():
     for voice in result.voices:
         assert voice.instrument.vibrato_cents == 12.0
         assert voice.instrument.vibrato_delay == 0.42
+
+
+def test_nes_tight_is_three_pulses_and_a_triangle():
+    """Not the true NES roster (two pulses, one triangle) — an audition at
+    count = 3 found the arranger's overflow turns the lone middle voice into
+    an 819-step near-continuous arp on the minuet fixture, so the preset
+    falls back to count = 4 until the arranger can carry three voices
+    musically. Three pulses sound at once here, which no NES can do; see
+    the preset's header for the measured numbers."""
+    result = load([], preset="nes-tight")
+    assert [v.role for v in result.voices] == ["lead", "counter", "inner_a", "bass"]
+    waves = [v.instrument.wave for v in result.voices]
+    assert waves == ["pulse", "pulse", "pulse", "triangle"]
+
+
+def test_nes_tight_carries_its_overflow_on_inner_a():
+    """At count = 4 the arp carrier is inner_a, the narrowest *surviving*
+    middle — not the narrowest pulse in absolute terms. The preset styles
+    inner_a's envelope and pan but does not set its duty, so it keeps the
+    roster default of 0.25 rather than counter's overridden 0.125."""
+    result = load([], preset="nes-tight")
+    by_role = {v.role: v for v in result.voices}
+    assert result.voices.arp == "inner_a"
+    assert by_role["inner_a"].instrument.duty == 0.25
 
 
 def test_lush_widens_the_image_and_deepens_the_vibrato():

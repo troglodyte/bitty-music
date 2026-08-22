@@ -1,8 +1,13 @@
 import pytest
 import numpy as np
+from dataclasses import replace
+from pathlib import Path
 
 from bitty.arrangement import Arrangement, Channel, Echo, Event, Instrument, Loop
 from bitty.synth import SAMPLE_RATE, render, Render
+from bitty.ingest import ingest
+from bitty.arrange import arrange
+from bitty.config import DEFAULTS
 
 
 def one_note(
@@ -274,3 +279,64 @@ def test_an_instrument_without_vibrato_events_ignores_its_vibrato_fields():
         return render(Arrangement(meta={}, channels=(channel,)))
 
     assert np.array_equal(rendered(25.0), rendered(80.0))
+
+
+def test_incoherent_summing_stays_loud_across_voice_counts():
+    """sqrt(n) gain keeps output level constant as voices change.
+
+    N independent channels at distinct pitches sum incoherently, giving
+    power proportional to N. The gain = MIX_HEADROOM / sqrt(N) compensation
+    at synth.py:88 holds output level nearly constant. This guards against
+    regression to a fixed divisor, which would produce output proportional to
+    sqrt(N) and grow ~58% from N=2 to N=5.
+
+    vel=4 is deliberate, not incidental: at vel=15 the mix drives deep into
+    the tanh soft clipper (synth.py:105), which compresses the very spread
+    this test measures and lets several wrong gain laws slip under a loose
+    threshold. At vel=4 the clipper stays out of the picture and the spread
+    tracks the gain law honestly. Measured spread with correct gain is
+    ~1.005x; a fixed-divisor break (gain = MIX_HEADROOM, no sqrt) measures
+    ~1.48x.
+    """
+    levels = {}
+    for count in (2, 3, 4, 5):
+        # Build an arrangement with `count` channels, each on a distinct pitch.
+        # Distinct pitches ensure incoherent summing (the assumption sqrt(n) encodes).
+        channels = tuple(
+            Channel(
+                role=f"v{i}",
+                instrument=Instrument(wave="pulse", duty=0.5),
+                events=(Event(t=0.0, pitch=60 + i, dur=1.0, vel=4),),
+            )
+            for i in range(count)
+        )
+        arrangement = Arrangement(meta={}, channels=channels)
+        audio = render(arrangement)
+        levels[count] = float(np.sqrt(np.mean(audio**2)))
+
+    # With sqrt(n) compensation, the levels should stay roughly constant.
+    # Correct gain measures ~1.005x; every broken divisor tried (a fixed
+    # constant, /2, /sqrt(5), /5) measures 1.47x or higher at this velocity.
+    # 1.2 sits with clear headroom on both sides.
+    ratio = max(levels.values()) / min(levels.values())
+    assert ratio < 1.2, f"levels spread {ratio:.2f}x across {sorted(levels.keys())} channels"
+
+
+def test_count_path_smoke_check_three_voices():
+    """Smoke test: verify count path works and produces audible output.
+
+    This test loads a real score and arranges it with 3 and 5 voices,
+    confirming both produce audible output comparable in level. It is not a
+    gain-law guard — constant gains cancel in ratios — but rather verifies the
+    count feature integrates end-to-end without regression to silence.
+    """
+    score = ingest(Path(__file__).parent / "fixtures" / "minuet.mxl")
+    levels = {}
+    for count in (3, 5):
+        config = replace(DEFAULTS, voices=replace(DEFAULTS.voices, count=count))
+        audio = render(arrange(score, config))
+        levels[count] = float(np.sqrt(np.mean(audio**2)))
+
+    assert levels[3] > 0.0 and levels[5] > 0.0
+    ratio = levels[3] / levels[5]
+    assert 0.5 < ratio < 2.0, f"three voices mixed at {ratio:.2f}x five voices"
