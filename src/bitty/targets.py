@@ -36,6 +36,75 @@ def write_audio(
     return path
 
 
+MANIFEST_NAME = "music.ron"
+ENTRY_INDENT = " " * 8
+FIELD_INDENT = " " * 12
+
+
+def _ron_str(value: str) -> str:
+    """RON strings are Rust strings: backslash first, then quote."""
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+def _title(render: Render, name: str) -> str:
+    """A hand-edited arrangement may carry no title at all."""
+    return render.meta.get("title") or name
+
+
+def _common_fields(render: Render) -> list[tuple[str, str]]:
+    """The fields every target's entry ends with.
+
+    `bars` is omitted rather than defaulted: `arrange` writes it only when the
+    score had bars, and an invented range would be a lie the game can read.
+    """
+    fields = [("bpm", repr(float(render.meta.get("bpm") or 0.0)))]
+    bars = render.meta.get("bars")
+    if bars:
+        fields.append(("bars", f"({bars[0]}, {bars[-1]})"))
+    return fields
+
+
+def _entry(key: str, fields: list[tuple[str, str]]) -> str:
+    """One map entry, indented to sit inside the manifest's `tracks`."""
+    lines = [f"{ENTRY_INDENT}{_ron_str(key)}: ("]
+    lines += [f"{FIELD_INDENT}{name}: {value}," for name, value in fields]
+    lines.append(f"{ENTRY_INDENT}),")
+    return "\n".join(lines) + "\n"
+
+
+def _write_fragment(out_dir: Path, name: str, target: str, body: str) -> Path:
+    """One piece's entry in its own file.
+
+    Per-target naming so two targets in one directory cannot clobber each
+    other, and one file per piece so no step ever reads and rewrites a shared
+    manifest — which is what makes re-converting one piece unable to drop
+    another's entry.
+    """
+    out_dir.mkdir(parents=True, exist_ok=True)
+    path = out_dir / f"{name}.{target}.ron"
+    path.write_text(body)
+    return path
+
+
+def assemble(out_dir: Path, target: str) -> Path | None:
+    """Concatenate every fragment for `target` into `music.ron`.
+
+    A glob, a sort, and a join — no RON parser on either side of the round
+    trip. Returns None when the target writes no fragments, so a
+    generic-only directory never grows a manifest.
+    """
+    fragments = sorted(out_dir.glob(f"*.{target}.ron"))
+    if not fragments:
+        return None
+
+    body = "".join(fragment.read_text() for fragment in fragments)
+    path = out_dir / MANIFEST_NAME
+    path.write_text(f"(\n    tracks: {{\n{body}    }},\n)\n")
+    typer.echo(f"{path}")
+    return path
+
+
 def _emit_generic(
     render: Render, out_dir: Path, name: str, *, audio_format: str = "ogg"
 ) -> list[Path]:
