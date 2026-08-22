@@ -488,6 +488,33 @@ first, then a `[voices.<role>]` table overrides one role afterward. Across
 files, it's simpler — the later file's value just wins, same as every
 other key.
 
+### `[voices] count`
+
+`count` — an integer, 3 to 5, default 5 — narrows the roster. It is the one
+scalar key in the `[voices]` table; every other key there is a role
+sub-table, as above.
+
+Lead and bass are structural pins: the reduction assigns against the top
+and bottom of the standing texture, so both always survive. `count`
+shrinks the middle voices instead, one at a time, from the narrowest
+duty width — a role that has nowhere left to fold its overflow becomes
+the arp carrier for whatever's left:
+
+| count | active voices | dropped | arp carrier |
+|-------|---------------|---------|-------------|
+| 5 | lead, counter, inner_a, inner_b, bass | — | `inner_b` |
+| 4 | lead, counter, inner_a, bass | `inner_b` | `inner_a` |
+| 3 | lead, counter, bass | `inner_b`, `inner_a` | `counter` |
+
+Three is the floor, not an arbitrary limit: below it there is no middle
+voice left to carry the arpeggio overflow, and the reduction has nowhere
+to put a chord tone that didn't make the cut. At the default of 5, this
+key changes nothing — count 5 is the roster this project always shipped.
+
+A dropped voice's `[voices.<role>]` overrides are still accepted; they
+just have nothing to apply to unless a later config layer raises `count`
+again.
+
 ### Milliseconds in the file, seconds in the code
 
 Every key ending in `_ms` — `arp.rate_ms`, `vibrato.delay_ms`,
@@ -500,12 +527,11 @@ carry the other side's convention.
 
 Two ship in `presets/`, selected with `--preset NAME`:
 
-- **`nes-tight`** — closer to the hardware: no echo, a mono image (every
-  voice's pan pinned to `0.0`), and vibrato that arrives later and
-  shallower. **It changes timbre only.** There is no `count` key yet, so
-  it cannot actually drop the roster to four channels the way real NES
-  hardware would — the name overclaims slightly on that point (see
-  Status).
+- **`nes-tight`** — closer to the hardware: `count = 3`, no echo, a mono
+  image (every voice's pan pinned to `0.0`), and vibrato that arrives
+  later and shallower. Two pulses and a triangle is the NES melodic
+  roster, so this is a genuine three-channel reduction, not a
+  timbre-only approximation of one.
 - **`lush`** — the other direction: a longer, louder echo, a wide stereo
   image, and vibrato that arrives early enough to sing on ordinary
   phrase-length notes.
@@ -534,12 +560,14 @@ Phase 4 is done: ingest, synthesis, the reduction, articulation, structural
 analysis, and looping — the loop cascade, `--bars` and `--loop-from`, and the
 intro/loop split. Phase 5 is done, both halves: 5a's `Render` contract, the
 `bevy`, `bevy-kira`, and `generic` targets, and `music.ron` assembly; 5b's
-TOML config, the precedence cascade, and the two shipped presets.
+TOML config, the precedence cascade, and the two shipped presets. Phase 6 is
+done pending its audition: `[voices] count`, narrowing the roster down to as
+few as three voices, and `nes-tight` as a genuine three-channel NES
+reduction rather than a timbre-only approximation of one.
 
 Deliberately still ahead: `[transform]` (`transpose`, `tempo_scale`) as its
-own phase with its own auditions; `voices.count`, which is what an honest
-four-channel `nes-tight` would need; and tail-wrapping, deferred since
-Phase 4b pending an audition of its own.
+own phase with its own auditions, and tail-wrapping, deferred since Phase 4b
+pending an audition of its own.
 
 Design documents and per-phase implementation plans live in
 `docs/superpowers/`.
