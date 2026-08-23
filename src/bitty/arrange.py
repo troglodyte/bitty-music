@@ -303,6 +303,11 @@ def _arpeggiate(
                 )
             case Drop():
                 pass
+            case _:
+                # `match` falls through silently on an unmatched case rather
+                # than raising, so a fourth `Decision` type would otherwise
+                # vanish here without a trace instead of failing loudly.
+                raise TypeError(f"unhandled reduce decision: {decision!r}")
 
     return _clip_overlaps(sorted(out, key=lambda take: take.t))
 
