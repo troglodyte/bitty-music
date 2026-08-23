@@ -324,28 +324,29 @@ def test_nes_tight_turns_the_echo_off_and_centres_the_image():
         assert voice.instrument.vibrato_delay == 0.42
 
 
-def test_nes_tight_is_three_pulses_and_a_triangle():
-    """Not the true NES roster (two pulses, one triangle) — an audition at
-    count = 3 found the arranger's overflow turns the lone middle voice into
-    an 819-step near-continuous arp on the minuet fixture, so the preset
-    falls back to count = 4 until the arranger can carry three voices
-    musically. Three pulses sound at once here, which no NES can do; see
-    the preset's header for the measured numbers."""
+def test_nes_tight_is_two_pulses_and_a_triangle():
+    """The true NES melodic roster. Held at count = 4 until 2026-08-23, when
+    an audition accepted count = 3: the reduction policy had cut the lone
+    middle voice's arpeggio from 92%/54%/43% of the chorale/minuet/ragtime to
+    0.0%/0.0%/26.1%. Four voices would sound three pulses at once, which no
+    NES can do; see the preset's header for the harmony this trade costs."""
     result = load([], preset="nes-tight")
-    assert [v.role for v in result.voices] == ["lead", "counter", "inner_a", "bass"]
+    assert [v.role for v in result.voices] == ["lead", "counter", "bass"]
     waves = [v.instrument.wave for v in result.voices]
-    assert waves == ["pulse", "pulse", "pulse", "triangle"]
+    assert waves == ["pulse", "pulse", "triangle"]
+    assert waves.count("pulse") == 2, "three pulses at once is not an NES"
 
 
-def test_nes_tight_carries_its_overflow_on_inner_a():
-    """At count = 4 the arp carrier is inner_a, the narrowest *surviving*
-    middle — not the narrowest pulse in absolute terms. The preset styles
-    inner_a's envelope and pan but does not set its duty, so it keeps the
-    roster default of 0.25 rather than counter's overridden 0.125."""
+def test_nes_tight_carries_its_overflow_on_counter():
+    """At count = 3 the arp carrier is counter — the narrowest *surviving*
+    middle, and at three voices the only one. The preset overrides counter's
+    duty to 0.125, so unlike inner_a at count = 4 (which keeps the roster
+    default of 0.25) the carrier's timbre here is set by the preset itself."""
     result = load([], preset="nes-tight")
     by_role = {v.role: v for v in result.voices}
-    assert result.voices.arp == "inner_a"
-    assert by_role["inner_a"].instrument.duty == 0.25
+    assert result.voices.arp == "counter"
+    assert by_role["counter"].instrument.duty == 0.125
+    assert "inner_a" not in by_role, "inner_a is silent at count = 3"
 
 
 def test_lush_widens_the_image_and_deepens_the_vibrato():
