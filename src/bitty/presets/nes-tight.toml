@@ -1,22 +1,23 @@
 # Close to the hardware: no echo, a mono image, shallow late vibrato, and
-# envelopes that decay rather than sit. Four channels, not the NES's true
-# two-pulses-and-a-triangle melodic roster — three pulses sound at once here,
-# which no NES can do — but closer than the five-voice default.
+# envelopes that decay rather than sit. Three voices — the NES's true
+# two-pulses-and-a-triangle melodic roster.
 #
-# count = 3 would be the honest roster, but is not shippable yet: at three
-# voices there is only one middle voice, so `_pick_middle` can place at most
-# one note per onset and everything else overflows into `_arpeggiate`. The
-# arpeggio itself is fine now — Phase 7 put it in tune — so what is left is
-# a question of proportion. Re-auditioned 2026-08-23: the chorale spends 92%
-# of its length with its entire middle voice on a two-note arpeggio, the
-# minuet 54%, ragtime 43%; at count = 4 the first two do not arpeggiate at
-# all. The verdict was "better, still not musical" — a correct effect
-# covering far too much of the piece. Making count = 3 musical is arranger
-# work (spreading overflow more gently, or a second arp carrier) that is its
-# own later phase; until then this preset uses count = 4.
+# count = 3 was held back until 2026-08-23. At three voices there is only one
+# middle voice, so `_pick_middle` places at most one note per onset and
+# everything else overflows; before the reduction policy that overflow became
+# a near-continuous arpeggio covering 92% of the chorale, 54% of the minuet
+# and 43% of ragtime, which auditioned as "better, still not musical". The
+# reduction policy now judges overflow before folding it, and the arpeggio's
+# share falls to 0.0% on both the chorale and the minuet and 26.1% on
+# ragtime. Auditioned at these settings and accepted.
+#
+# What that costs: the policy drops notes rather than arpeggiating them, so a
+# few chords lose a third they used to have — 7 of the chorale's 34 reduction
+# decisions at this count. That is the trade this preset accepts to sound
+# like the hardware.
 
 [voices]
-count = 4
+count = 3
 
 [echo]
 on = false
@@ -29,6 +30,10 @@ delay_ms = 420
 volume_env = [15, 14, 12, 10, 9, 8, 8]
 pan = 0.0
 
+# counter carries the arp overflow at count = 3 (`.arp` is the narrowest
+# surviving middle, and at three voices that is counter itself). Its duty of
+# 0.125 is therefore what ragtime's 26% of arpeggio actually sounds like —
+# load-bearing, not just colour on a supporting part.
 [voices.counter]
 duty = 0.125
 volume_env = [12, 11, 9, 8, 7, 7]
@@ -38,13 +43,12 @@ pan = 0.0
 volume_env = [15, 13, 11, 10]
 pan = 0.0
 
-# inner_a is active at count = 4 and carries the arp overflow (`.arp` is the
-# narrowest surviving middle) — its styling here is load-bearing, not moot.
-# inner_b stays styled even though it is silent at this preset's own count:
-# truncation is a view, not a deletion, so it stays addressable in case a
-# later config layer raises the count back to 5. Deleting it here means an
-# inner voice that comes back reappears un-styled: default envelope, default
-# pan, half-mono image from a preset whose whole point is mono.
+# Both inner voices are silent at this preset's own count. They stay styled
+# because truncation is a view, not a deletion: a later config layer can raise
+# the count back to 4 or 5, and an inner voice that comes back un-styled
+# reappears with a default envelope, default pan, and a half-mono image from a
+# preset whose whole point is mono. At count = 4, inner_a is also where the
+# arp overflow moves.
 [voices.inner_a]
 volume_env = [11, 9, 8, 7, 7]
 pan = 0.0

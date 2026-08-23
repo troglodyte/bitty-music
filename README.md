@@ -553,14 +553,14 @@ carry the other side's convention.
 
 Two ship in `presets/`, selected with `--preset NAME`:
 
-- **`nes-tight`** — closer to the hardware: `count = 4`, no echo, a mono
+- **`nes-tight`** — closer to the hardware: `count = 3`, no echo, a mono
   image (every voice's pan pinned to `0.0`), and vibrato that arrives
-  later and shallower. Four channels, not the NES's true
-  two-pulses-and-a-triangle melodic roster — three pulses sound at once
-  here, which no NES can do. `count = 3` would be the honest roster, but
-  an audition found the arranger folds too much of the piece onto the
-  lone middle voice's arpeggio to sound musical; see the caveat under
-  `[voices] count` below.
+  later and shallower. Three channels: the NES's true
+  two-pulses-and-a-triangle melodic roster. This preset sat at `count = 4`
+  until the reduction policy made three voices musical — before it, the
+  lone middle voice arpeggiated through most of the piece. The honest
+  roster is not free: at three voices a few chords lose a third they used
+  to have. See `[voices] count` below.
 - **`lush`** — the other direction: a longer, louder echo, a wide stereo
   image, and vibrato that arrives early enough to sing on ordinary
   phrase-length notes.
@@ -591,10 +591,10 @@ intro/loop split. Phase 5 is done, both halves: 5a's `Render` contract, the
 `bevy`, `bevy-kira`, and `generic` targets, and `music.ron` assembly; 5b's
 TOML config, the precedence cascade, and the two shipped presets. Phase 6 is
 done: `[voices] count`, narrowing the roster down to as few as three
-voices, and `nes-tight` at `count = 4` — closer to the NES's true
-two-pulses-and-a-triangle roster than the five-voice default, though not
-that roster itself; an audition found `count = 3` overflows into a
-near-continuous arpeggio on a dense score. Phase 7 is done: that arpeggio
+voices, and `nes-tight` — which shipped at `count = 4` because an audition
+found `count = 3` overflows into a near-continuous arpeggio on a dense
+score, and which Phase 8's audition has since moved to `count = 3`, the
+NES's true two-pulses-and-a-triangle roster. Phase 7 is done: that arpeggio
 now plays in tune, and sounds like an arpeggio. Three things changed, and
 the audition needed all three. An overflowing chord emits one event
 carrying its semitone offsets instead of one 16 ms event per step, so the
@@ -626,28 +626,28 @@ doubling of something already sounding, the third takes that note's place
 rather than being lost. The measured effect is large: the chorale's carrier
 arpeggiated through 92.2% of the piece before this and 0.0% after; the
 minuet goes from 66.7% to 0.0%; ragtime falls from 59.8% to 26.1% at
-`count = 3`, from 41.5% to 2.1% at `nes-tight`'s `count = 4`, and from
-15.6% to 2.1% at the `count = 5` default. None of that is free: dropping
-notes loses harmony the previous implementation never lost, since it kept
-every note. A handful of chords per fixture now sound without a third that
-used to be there — seven on the chorale and four on ragtime at `count = 3`,
-five on ragtime at `count = 4`, none on the minuet or on ragtime at
-`count = 5`.
+`count = 3` — which is what `nes-tight` now ships — from 41.5% to 2.1% at
+`count = 4`, and from 15.6% to 2.1% at the `count = 5` default. None of
+that is free: dropping notes loses harmony the previous implementation
+never lost, since it kept every note. A handful of chords per fixture now
+sound without a third that used to be there — seven on the chorale and four
+on ragtime at `count = 3`, five on ragtime at `count = 4`, none on the
+minuet or on ragtime at `count = 5`.
 
-`nes-tight` stays at `count = 4`. Whether `count = 3` is musical remains
-open — the arpeggio's share of the piece being gone or much reduced is a
-measured fact, not an audition; whether the result sounds reduced or sounds
-thin has not been heard. Nor have `nes-tight` and
-the `count = 5` default themselves: both now sound different from the
-arpeggio Phase 7 auditioned and accepted, so both need a fresh listen before
-this phase is really finished.
+Auditioned 2026-08-23 and accepted, which finishes the phase: the
+`count = 5` default, `count = 4`, and `count = 3` on all three fixtures,
+plus `nes-tight` at its own settings. The question Phase 8 left open —
+whether a reduced texture sounds reduced or merely thin — came back
+reduced. So `nes-tight` moves from `count = 4` to `count = 3` and is now
+the honest two-pulses-and-a-triangle roster; the reason it sat at 4 was
+that `count = 3` was not musical, and that is no longer true. One thing
+the numbers did not predict: at `count = 3` the arp carrier moves from
+`inner_a` to `counter`, so the preset's own `duty = 0.125` override is
+what ragtime's remaining arpeggio sounds like.
 
 Deliberately still ahead: `[transform]` (`transpose`, `tempo_scale`) as its
-own phase with its own auditions, tail-wrapping, deferred since Phase 4b
-pending an audition of its own, and a musical `count = 3` — the honest
-two-pulse NES roster, blocked on an audition rather than more
-implementation: Phase 8 already stopped the overflow that used to
-arpeggiate through the whole piece.
+own phase with its own auditions, and tail-wrapping, deferred since Phase 4b
+pending an audition of its own.
 
 Design documents and per-phase implementation plans live in
 `docs/superpowers/`.
