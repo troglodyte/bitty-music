@@ -635,9 +635,9 @@ five on ragtime at `count = 4`, none on the minuet or on ragtime at
 `count = 5`.
 
 `nes-tight` stays at `count = 4`. Whether `count = 3` is musical remains
-open — the arpeggio's share of the piece is gone or much reduced, which is
-what an audition can measure without listening, but whether the result
-sounds reduced or sounds thin has not been heard. Nor have `nes-tight` and
+open — the arpeggio's share of the piece being gone or much reduced is a
+measured fact, not an audition; whether the result sounds reduced or sounds
+thin has not been heard. Nor have `nes-tight` and
 the `count = 5` default themselves: both now sound different from the
 arpeggio Phase 7 auditioned and accepted, so both need a fresh listen before
 this phase is really finished.

@@ -91,6 +91,17 @@ Rule 3 exists because rules 1 and 2 choose what to keep by pitch height —
 alto over tenor — and never by harmonic function, so the third is lost
 whenever the tenor happens to hold it.
 
+**Note (post-implementation):** rule 3's "counting arpeggio members" above
+is aspirational, not what ships. `sounding` and `others` are computed once
+per onset from the texture `_assign` left behind, before the policy runs on
+any overflow group; a `Displace` or `Cycle` decided at an earlier onset is
+never folded back in when a later onset is judged. This is deliberate —
+`_arpeggiate`'s docstring in `arrange.py` says so — because it keeps every
+onset's verdict independent of the order overflow onsets happen to be
+processed in. The cost is that a third rescued by rule 3 at one onset does
+not count as "already sounding" for a rule 1 or rule 3 decision at the next
+onset, even though by then it audibly is.
+
 ## Measured outcome
 
 Prototyped end to end before this spec was written, not projected:

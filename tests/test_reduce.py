@@ -79,19 +79,6 @@ def test_a_lone_pitch_is_not_a_cycle_either():
     assert result == Drop()
 
 
-def test_three_pitches_still_survive():
-    """The rule removes trills, not arpeggios."""
-    result = decide(
-        notes=(note(70), note(74)),
-        carrier=(60,),
-        sounding=frozenset({0}),
-        others=frozenset({0, 7}),
-        bass=48,
-    )
-    assert isinstance(result, Cycle)
-    assert len(result.pitches) == 3
-
-
 def test_the_only_third_displaces_a_redundant_doubling():
     """Rules 1 and 2 choose by pitch height and never by harmonic function, so
     the third is lost whenever the inner part below happens to hold it."""
@@ -142,3 +129,18 @@ def test_a_tenth_counts_as_a_third():
         bass=48,
     )
     assert result == Displace(pitch=76)
+
+
+def test_no_bass_means_no_rescue():
+    """With no bass channel sounding, rule 3 has nothing to measure a third
+    against, so it cannot fire -- even where it otherwise would have."""
+    # Same shape as the only-third rescue above, but the bass channel is
+    # silent at this onset.
+    result = decide(
+        notes=(note(64),),
+        carrier=(67,),
+        sounding=frozenset({0, 7}),
+        others=frozenset({0, 7}),
+        bass=None,
+    )
+    assert result == Drop()

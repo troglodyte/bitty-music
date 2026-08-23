@@ -20,7 +20,7 @@ from itertools import groupby
 from bitty.arrangement import MAX_VELOCITY, Arrangement, Channel, Echo, Event
 from bitty.config import DEFAULTS, Config, EchoSettings
 from bitty.model import Note, Score
-from bitty.reduce import Cycle, Displace, Drop, decide
+from bitty.reduce import OCTAVE, Cycle, Displace, Drop, decide
 from bitty.voices import Roster
 
 EPSILON = 1e-6  # onset times are floats; anything closer than this is one moment
@@ -328,7 +328,7 @@ def _held(takes: list[_Take], onset: float) -> int | None:
 def _pitch_classes(tracks: Tracks, onset: float, *, without: str | None = None) -> frozenset[int]:
     """Every pitch class audible at `onset`, optionally ignoring one channel."""
     return frozenset(
-        take.pitch % 12
+        take.pitch % OCTAVE
         for role, takes in tracks.items()
         if role != without
         for take in takes

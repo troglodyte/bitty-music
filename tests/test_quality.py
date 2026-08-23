@@ -86,9 +86,14 @@ def test_dynamics_are_not_flat(name):
 THIRDS = (3, 4)  # minor and major; a tenth is a third folded into the octave
 
 # (fixture, count): (max arp share %, max hollow chords)
-# Phase 8. The arp shares come from the spec's measured-outcome table; the
-# hollow counts are the harmony that shrinking them costs, which rule 3
-# reduces but does not eliminate.
+# Phase 8. The chorale-3, minuet-3, and all three ragtime rows are spec-backed
+# (measured-outcome table in the design doc); their hollow counts are the
+# harmony that shrinking the arp share costs, which rule 3 reduces but does
+# not eliminate. The chorale-4/5 and minuet-4/5 rows are not in the spec's
+# table at all -- at those counts both fixtures produce zero leftover onsets,
+# so there is no overflow for either assertion to measure. They stay in the
+# table as a tripwire: if a future change ever makes these counts overflow,
+# these rows start meaning something.
 REDUCTION = {
     ("chorale", 3): (0.1, 7),
     ("chorale", 4): (0.1, 0),
@@ -100,6 +105,17 @@ REDUCTION = {
     ("ragtime", 4): (2.2, 5),
     ("ragtime", 5): (2.2, 0),
 }
+
+# The hollow-chord side of this table is proven, not just asserted: with
+# `_arpeggiate` in `src/bitty/arrange.py` patched to `continue` at the top of
+# its `for onset, notes in leftovers:` loop -- discarding overflow instead of
+# folding it into a cycle -- 5 of these 9 cases failed on the `hollow`
+# assertion itself, not just `arp share`: chorale-3 measured 9 against a
+# ceiling of 0, minuet-3 measured 3, ragtime-3 measured 18, ragtime-4
+# measured 14, and ragtime-5 measured 7. That confirms `_hollow` detects a
+# real lost third under a drop-everything policy rather than only ever
+# tripping on cycle duration. The final whole-branch review independently
+# reproduced this break.
 
 
 def _sounding(takes, onset):
