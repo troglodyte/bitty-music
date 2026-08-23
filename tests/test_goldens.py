@@ -57,14 +57,27 @@ def test_every_source_note_is_heard(name):
     sounding elsewhere in the same chord may be dropped outright, or have its
     slot in the reduction handed to a different note that voices the chord's
     third instead (rule 3 displacing a doubling). Such a note is excused from
-    the "must be heard" check below only when the score itself already
-    contains another simultaneous note of the same pitch class -- i.e. only
-    when losing it truly adds nothing new. A note that is not a doubling
-    still has to be heard, exactly as before.
+    the "must be heard" check below only when its pitch class is genuinely
+    sounding in the *arrangement* at that moment -- on any channel, counting
+    arpeggio members. Checking the source score instead would be a hole: a
+    policy that dropped every member of a doubled pitch class would let those
+    notes excuse each other while the pitch class vanished from the output
+    with nothing to catch it. A note that isn't actually heard anywhere,
+    directly or as a pitch class, still fails this test.
     """
     score = ingest(FIXTURES / f"{name}.mxl")
     events = [e for c in arranged(name).channels for e in c.events]
-    for i, note in enumerate(score.notes):
+
+    def pitch_class_sounds(pitch_class, start, dur):
+        for e in events:
+            members = {(e.pitch + o) % 12 for o in e.arp} if e.arp else {e.pitch % 12}
+            if pitch_class not in members:
+                continue
+            if e.t - EPSILON <= start + dur and e.t + e.dur + EPSILON >= start:
+                return True
+        return False
+
+    for note in score.notes:
         heard = any(
             (e.pitch == note.pitch and abs(e.t - note.start) <= EPSILON)
             or (
@@ -76,13 +89,9 @@ def test_every_source_note_is_heard(name):
         )
         if heard:
             continue
-        doubled = any(
-            j != i
-            and other.pitch % 12 == note.pitch % 12
-            and abs(other.start - note.start) <= EPSILON
-            for j, other in enumerate(score.notes)
+        assert pitch_class_sounds(note.pitch % 12, note.start, note.dur), (
+            f"{note} never sounds, and its pitch class isn't heard anywhere else either"
         )
-        assert doubled, f"{note} never sounds and doubles no simultaneous note"
 
 
 @pytest.mark.parametrize("name", NAMES)
@@ -94,18 +103,27 @@ def test_events_are_playable(name):
             assert 0 <= event.vel <= 15
 
 
+MIN_CHORD_MEMBERS = 3  # a two-pitch cycle is a trill, not a chord -- see bitty.reduce.MIN_MEMBERS
+
+
 def test_dense_writing_arpeggiates_and_sparse_writing_does_not():
     """A count, not a bool: 'some event has arp' would be satisfied by a
-    single lucky cycle. Phase 8's drop/displace rules cut most of ragtime's
-    former overflow down to plain notes or nothing at all, so the count that
-    survives is small (one real chord, at t=9.6) -- but it must still be more
-    than chorale's sparse writing produces, which is none."""
+    single lucky cycle, and even 'more cycles than chorale' collapses to that
+    same weak claim once chorale has zero -- 1 > 0 says nothing about what the
+    one surviving cycle actually is. The spec's real promise (Measured
+    outcome) is that every surviving cycle at count 3 names a 3- or 4-member
+    chord, never a two-note trill. Assert that directly: it is what
+    MIN_MEMBERS exists to guarantee, and it fails the moment that guarantee
+    doesn't hold, independent of how many cycles happen to survive."""
     ragtime = {c.role: c.events for c in arranged("ragtime").channels}
     chorale = {c.role: c.events for c in arranged("chorale").channels}
     ragtime_arps = [e for e in ragtime["inner_b"] if e.arp]
     chorale_arps = [e for e in chorale["inner_b"] if e.arp]
-    assert len(ragtime_arps) > len(chorale_arps), (
-        "ragtime's dense writing must still produce at least one real cycle "
-        "that chorale's sparse writing does not"
-    )
-    assert not chorale_arps
+    assert ragtime_arps, "ragtime's dense writing must still produce at least one real cycle"
+    assert not chorale_arps, "chorale's sparse writing must produce none"
+    for event in ragtime_arps:
+        members = {event.pitch + offset for offset in event.arp}
+        assert len(members) >= MIN_CHORD_MEMBERS, (
+            f"{event.arp} names only {len(members)} distinct pitches -- a "
+            f"trill, not a chord"
+        )
