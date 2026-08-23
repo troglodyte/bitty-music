@@ -14,13 +14,13 @@ recognizable tune and note soup.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from itertools import groupby
 
 from bitty.arrangement import MAX_VELOCITY, Arrangement, Channel, Echo, Event
 from bitty.config import DEFAULTS, Config, EchoSettings
 from bitty.model import Note, Score
-from bitty.reduce import Cycle, Displace, decide
+from bitty.reduce import Cycle, Displace, Drop, decide
 from bitty.voices import Roster
 
 EPSILON = 1e-6  # onset times are floats; anything closer than this is one moment
@@ -254,9 +254,13 @@ def _arpeggiate(
 
     `tracks` is read, never written: the policy judges each onset against the
     texture as `_assign` left it, so an earlier cycle cannot change the verdict
-    on a later one. The carrier's own notes arrive through `out`.
+    on a later one. The carrier's own notes arrive through `out`, as copies —
+    `out` holds `_Take`s the `Displace` arm below mutates in place, and a
+    shallow `list()` of `tracks[roster.arp]` would share those same objects
+    with `tracks`, letting a rewritten pitch leak back into a later onset's
+    `_pitch_classes` reading.
     """
-    out = list(tracks[roster.arp])
+    out = [replace(take) for take in tracks[roster.arp]]
 
     for onset, notes in leftovers:
         # Partition rather than remove-by-value: `_Take` is a mutable dataclass
@@ -297,7 +301,7 @@ def _arpeggiate(
                         arp=tuple(pitch - pitches[0] for pitch in pitches),
                     )
                 )
-            case _:  # Drop
+            case Drop():
                 pass
 
     return _clip_overlaps(sorted(out, key=lambda take: take.t))
