@@ -63,7 +63,10 @@ def decide(
     keep = tuple(n for n in notes if n.pitch % OCTAVE not in sounding)
     if not keep:
         return Drop()
-    return Cycle(pitches=_fold({n.pitch for n in keep} | set(carrier)), keep=keep)
+    pitches = _fold({n.pitch for n in keep} | set(carrier))
+    if len(pitches) < MIN_MEMBERS:
+        return Drop()
+    return Cycle(pitches=pitches, keep=keep)
 
 
 def _fold(members: set[int]) -> tuple[int, ...]:

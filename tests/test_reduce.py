@@ -48,3 +48,45 @@ def test_a_new_pitch_class_survives_as_a_cycle():
     assert isinstance(result, Cycle)
     assert result.pitches == (60, 62, 70)
     assert tuple(n.pitch for n in result.keep) == (70, 74)
+
+
+def test_two_pitches_are_a_trill_not_an_arpeggio():
+    """Phase 7 fixed how these cycles sound; this decides they should not exist.
+
+    A chip arpeggio names a chord by cycling its members. Two notes name
+    nothing, and every point of the chorale's 92.2% was one of these.
+    """
+    result = decide(
+        notes=(note(67),),           # G4 overflows
+        carrier=(60,),               # carrier holds C4
+        sounding=frozenset({0}),
+        others=frozenset({0, 4}),    # a third is already present elsewhere
+        bass=48,
+    )
+    assert result == Drop()
+
+
+def test_a_lone_pitch_is_not_a_cycle_either():
+    """The minuet carried a one-member `arp`, a plain note with its vibrato
+    suppressed for no reason. The same rule removes it."""
+    result = decide(
+        notes=(note(72),),           # C5 folds onto the carrier's C4
+        carrier=(60,),
+        sounding=frozenset(),
+        others=frozenset({0, 4}),
+        bass=48,
+    )
+    assert result == Drop()
+
+
+def test_three_pitches_still_survive():
+    """The rule removes trills, not arpeggios."""
+    result = decide(
+        notes=(note(70), note(74)),
+        carrier=(60,),
+        sounding=frozenset({0}),
+        others=frozenset({0, 7}),
+        bass=48,
+    )
+    assert isinstance(result, Cycle)
+    assert len(result.pitches) == 3
