@@ -245,6 +245,12 @@ def test_a_six_note_chord_arpeggiates_the_overflow():
 
 
 def test_nothing_is_dropped_when_the_channels_run_out():
+    """These seven pitches leave an overflow of 60, 62, 64 — inside one octave,
+    so the fold is a no-op here and every note survives at its own pitch. That
+    is deliberate: exact pitch is the strongest thing that can be asserted, and
+    it only holds when the overflow already fits. Once it does not, the fold
+    trades register for closeness and only pitch class survives, which is what
+    `test_the_arpeggio_stays_inside_one_octave` covers."""
     arrangement = arrange(
         score_of(*[note(p, 0.0, dur=1.0) for p in (72, 69, 67, 64, 62, 60, 48)])
     )
@@ -279,7 +285,9 @@ def test_a_chord_re_entering_after_a_rest_still_reaches_lead_and_bass():
 
 def test_a_short_dense_chord_still_sounds_every_pitch():
     """A cycle shorter than its pitch set is where voices quietly went missing:
-    seven notes lasting 32ms each left room for two arpeggio steps."""
+    seven notes lasting 32ms each left room for two arpeggio steps.
+
+    Same overflow as above, so the fold is a no-op and exact pitch holds."""
     arrangement = arrange(
         score_of(*[note(p, 0.0, dur=0.032) for p in (72, 69, 67, 64, 62, 60, 48)])
     )
@@ -433,7 +441,7 @@ def test_the_arpeggio_rate_travels_in_the_instrument_not_the_config():
             ),
         ),
     )
-    assert settings.arp.step_sec == 0.016, "the table must stay put or this proves nothing"
+    assert settings.arp.step_sec == 0.048, "the table must stay put or this proves nothing"
     score = score_of(
         note(72, 0.0, dur=0.01), note(69, 0.0, dur=0.01),
         note(67, 0.0, dur=0.01), note(64, 0.0, dur=0.01), note(48, 0.0, dur=0.01),
@@ -532,3 +540,34 @@ def test_the_echo_follows_the_lead_at_every_count():
         arrangement = arrange(score_of(note(72, 0.0), note(48, 0.0)), roster_of(count))
         with_echo = [c.role for c in arrangement.channels if c.echo is not None]
         assert with_echo == ["lead"]
+
+
+def test_the_arpeggio_stays_inside_one_octave():
+    """The test that excludes taking overflow pitches as they lie.
+
+    Ragtime's widest overflow alternated F3 with A-flat4 — an octave and a
+    fourth, cycling nine times inside one 0.3 s event. Nothing about that
+    reads as a chord; it reads as a siren. A chip arpeggio names a chord by
+    cycling its members close together, so every member folds into the
+    octave above the lowest. Pitch class is what survives, register is not.
+    """
+    arrangement = arrange(
+        score_of(
+            note(53, 0.0, dur=0.3), note(68, 0.0, dur=0.3), note(72, 0.0, dur=0.3),
+            note(69, 0.0, dur=0.3), note(67, 0.0, dur=0.3), note(48, 0.0, dur=0.3),
+        )
+    )
+    arped = [e for c in arrangement.channels for e in c.events if e.arp]
+    assert arped, "a six-note chord must overflow"
+    for event in arped:
+        assert max(event.arp) < 12, f"{event.arp} leaps out of the octave"
+
+
+def test_the_default_arpeggio_is_slower_than_the_ear_fuses():
+    """Above roughly 20 Hz a cycle stops being heard as notes and becomes a
+    rough timbre — the reason the arpeggio sounded harsh even once it was in
+    tune. The hardware rate of one step per frame puts a two-note cycle at
+    31 Hz, squarely inside that band. The default has to clear it for the
+    smallest cycle there is, which is the two-note one."""
+    rate = DEFAULTS.voices.voices[1].instrument.arp_rate_sec
+    assert 1.0 / (2 * rate) < 20.0, "a two-note cycle must be heard as two notes"

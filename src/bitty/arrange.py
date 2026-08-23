@@ -261,7 +261,18 @@ def _arpeggiate(
         absorbed = [take for take in out if abs(take.t - onset) <= EPSILON]
         out = [take for take in out if abs(take.t - onset) > EPSILON]
 
-        pitches = sorted({n.pitch for n in notes} | {take.pitch for take in absorbed})
+        members = {n.pitch for n in notes} | {take.pitch for take in absorbed}
+        # Fold into the octave above the lowest member. Overflow arrives from
+        # whatever register it was written in, and a cycle that leaps an
+        # octave and a fourth nine times a second is a siren, not a chord --
+        # ragtime's F3 against A-flat4 was the case that made this audible.
+        # A chip arpeggio names a chord by cycling its members close
+        # together, so pitch class is the part worth keeping and register is
+        # the part spent to keep it. Folding before the set is built also
+        # collapses members an octave apart into one step rather than
+        # cycling the same pitch class twice.
+        low = min(members)
+        pitches = sorted({low + (pitch - low) % 12 for pitch in members})
         # The cycle lasts only as long as its shortest member: a note that has
         # ended must not keep sounding just because the arpeggio is still
         # running. But it owes every member one step — a short dense chord, an

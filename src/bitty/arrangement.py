@@ -19,7 +19,14 @@ MAX_VELOCITY = 15
 VIBRATO_CENTS = 25.0
 VIBRATO_DELAY = 0.3
 VIBRATO_RATE_HZ = 5.5
-ARP_RATE_SEC = 0.016  # seconds per cycle step; the classic hardware rate
+# Seconds per cycle step. One step per frame (0.016) is the classic hardware
+# rate, and it is wrong here: at 0.016 a two-note cycle alternates at 31 Hz,
+# inside the band where the ear fuses a modulation into a rough timbre rather
+# than hearing notes. Real chip arpeggios get away with it by cycling three
+# notes of a triad, which fuses into a chord; the reduction hands this one
+# mostly two-note cycles, which just buzz. 0.048 puts the smallest cycle at
+# 10 Hz, heard as an ornament.
+ARP_RATE_SEC = 0.048
 
 
 @dataclass(frozen=True)

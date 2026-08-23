@@ -204,4 +204,4 @@ def test_an_instrument_carries_the_default_arp_rate():
     """The rate travels in the arrangement for the reason vibrato's does:
     a hand-edited file must render the same with no config anywhere."""
     assert Instrument(wave="pulse").arp_rate_sec == ARP_RATE_SEC
-    assert ARP_RATE_SEC == 0.016
+    assert ARP_RATE_SEC == 0.048

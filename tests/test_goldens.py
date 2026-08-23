@@ -45,6 +45,13 @@ def test_every_source_note_is_heard(name):
     arpeggio step of its pitch falls inside its span. Merely finding the same
     pitch somewhere in the window would let a dropped note be excused by an
     unrelated voice that happens to be playing it.
+
+    The arpeggio half of that is deliberately weaker than the onset half, and
+    got weaker still when the cycle began folding into one octave: a folded
+    member matches its source note by pitch class, not by pitch. That is a
+    real loss and it is the price the fold was chosen for -- an overflowed
+    A-flat4 now sounds as A-flat3. What the fold must not do is lose the note
+    altogether, and pitch class is what still catches that.
     """
     score = ingest(FIXTURES / f"{name}.mxl")
     events = [e for c in arranged(name).channels for e in c.events]
@@ -53,7 +60,7 @@ def test_every_source_note_is_heard(name):
             (e.pitch == note.pitch and abs(e.t - note.start) <= EPSILON)
             or (
                 e.arp
-                and note.pitch - e.pitch in e.arp
+                and (note.pitch - e.pitch) % 12 in e.arp
                 and note.start - EPSILON <= e.t <= note.start + note.dur + EPSILON
             )
             for e in events

@@ -33,7 +33,7 @@
         "vibrato_cents": 25.0,
         "vibrato_delay": 0.3,
         "vibrato_rate_hz": 5.5,
-        "arp_rate_sec": 0.016
+        "arp_rate_sec": 0.048
       },
       "events": [
         {
@@ -388,7 +388,7 @@
         "vibrato_cents": 25.0,
         "vibrato_delay": 0.3,
         "vibrato_rate_hz": 5.5,
-        "arp_rate_sec": 0.016
+        "arp_rate_sec": 0.048
       },
       "events": [
         {
@@ -598,7 +598,7 @@
         "vibrato_cents": 25.0,
         "vibrato_delay": 0.3,
         "vibrato_rate_hz": 5.5,
-        "arp_rate_sec": 0.016
+        "arp_rate_sec": 0.048
       },
       "events": [
         {
@@ -832,7 +832,7 @@
         "vibrato_cents": 25.0,
         "vibrato_delay": 0.3,
         "vibrato_rate_hz": 5.5,
-        "arp_rate_sec": 0.016
+        "arp_rate_sec": 0.048
       },
       "events": [
         {
@@ -1057,7 +1057,7 @@
         "vibrato_cents": 25.0,
         "vibrato_delay": 0.3,
         "vibrato_rate_hz": 5.5,
-        "arp_rate_sec": 0.016
+        "arp_rate_sec": 0.048
       },
       "events": [
         {

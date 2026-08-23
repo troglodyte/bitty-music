@@ -42,7 +42,7 @@ class EchoSettings:
 
 @dataclass(frozen=True)
 class Arp:
-    step_sec: float = 0.016  # asserted equal to arrangement.ARP_RATE_SEC
+    step_sec: float = 0.048  # asserted equal to arrangement.ARP_RATE_SEC
 
 
 @dataclass(frozen=True)
