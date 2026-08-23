@@ -88,6 +88,14 @@ THIRDS = (3, 4)  # minor and major; a tenth is a third folded into the octave
 # (fixture, count): (max arp share %, max hollow chords)
 # Anchored to `main` before Phase 8. Nothing is dropped today, so nothing can
 # go hollow — every hollow ceiling here is 0 by construction, not by luck.
+#
+# The hollow-chord side of this table is proven, not just asserted: with
+# `_arpeggiate` in `src/bitty/arrange.py` patched to `continue` at the top of
+# its `for onset, notes in leftovers:` loop -- discarding overflow instead of
+# folding it into a cycle -- 5 of these 9 cases (chorale-3, minuet-3,
+# ragtime-3/4/5) failed on the `hollow` assertion itself, not just `arp
+# share`, confirming `_hollow` detects a real lost third under a
+# drop-everything policy rather than only ever tripping on cycle duration.
 REDUCTION = {
     ("chorale", 3): (92.3, 0),
     ("chorale", 4): (0.1, 0),
