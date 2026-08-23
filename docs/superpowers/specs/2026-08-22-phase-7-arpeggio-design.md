@@ -229,3 +229,36 @@ WAV only — `aplay` renders Ogg as static.
 - A per-event pitch sequence, which is the shape a deliberate arpeggio
   effect would want.
 - `[transform]` and tail-wrapping, both still ahead.
+
+## Audition outcome (2026-08-22)
+
+Both renders came back "still a little all over themselves and harsh" — the
+tuning fix landed, and it was not sufficient. The spec had named one risk
+correctly and missed a larger one.
+
+**Named correctly:** the fix might not rescue `count = 3`. It did not, on its
+own.
+
+**Missed:** the same complaint applied to *ragtime at the default preset*, not
+just to `count = 3`. This was never a reduction problem waiting on a later
+phase. It was the step rate, and it was audible in shipped output.
+
+Two causes, both measurable from the arrangement JSON without listening:
+
+1. **Rate.** At one step per frame a two-note cycle alternates at 31 Hz,
+   inside the band where the ear fuses modulation into roughness rather than
+   hearing notes. A hardware arpeggio survives that rate by cycling three
+   notes of a triad, which fuses into a chord; this reduction yields mostly
+   two-note cycles — 25 of 26 on the minuet, 7 of 8 on ragtime. Default step
+   raised to 48 ms.
+2. **Span.** Four of ragtime's eight arpeggios alternated F3 with A-flat4,
+   fifteen semitones, nine times inside one 0.3 s event. Members now fold into
+   the octave above the lowest.
+
+Accepted as "good enough" with both changes. `nes-tight` stays at `count = 4`;
+the `count = 3` question was not signed off and remains open.
+
+**What this changes for later phases:** "authentic to the hardware" and
+"sounds right" came apart here, and the divergence was arithmetic —
+`1 / (len(arp) * rate)` against the roughness band, and the count of two-note
+cycles. Compute both before an audition rather than after one.

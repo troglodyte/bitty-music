@@ -5,7 +5,7 @@ import pytest
 
 from bitty import voices
 from bitty.arrange import _velocity, arrange
-from bitty.config import DEFAULTS
+from bitty.config import DEFAULTS, merge
 from bitty.ingest import ingest
 from bitty.model import Note, Score
 
@@ -224,7 +224,7 @@ def test_when_every_channel_is_busy_the_nearest_one_is_stolen():
 
 
 def test_a_six_note_chord_arpeggiates_the_overflow():
-    """One channel stepping through the leftovers fast enough to read as chord."""
+    """One cycling note stepping through the leftovers, reading as a chord."""
     arrangement = arrange(
         score_of(
             note(72, 0.0, dur=1.0),
@@ -236,18 +236,30 @@ def test_a_six_note_chord_arpeggiates_the_overflow():
         )
     )
     arp = channels(arrangement)["inner_b"].events
-    assert len(arp) == 62  # int(1.0 / 0.016)
-    assert [e.dur for e in arp] == [0.016] * 62
+    assert len(arp) == 1
+    event = arp[0]
+    assert event.dur == 1.0
     # the channel's own note joins the cycle rather than being replaced by it
-    assert [e.pitch for e in arp[:4]] == [62, 64, 62, 64]
-    assert abs(arp[1].t - 0.016) < 1e-9
+    assert event.pitch == 62
+    assert event.arp == (0, 2)
 
 
 def test_nothing_is_dropped_when_the_channels_run_out():
+    """These seven pitches leave an overflow of 60, 62, 64 — inside one octave,
+    so the fold is a no-op here and every note survives at its own pitch. That
+    is deliberate: exact pitch is the strongest thing that can be asserted, and
+    it only holds when the overflow already fits. Once it does not, the fold
+    trades register for closeness and only pitch class survives, which is what
+    `test_the_arpeggio_stays_inside_one_octave` covers."""
     arrangement = arrange(
         score_of(*[note(p, 0.0, dur=1.0) for p in (72, 69, 67, 64, 62, 60, 48)])
     )
-    heard = {e.pitch for c in arrangement.channels for e in c.events}
+    heard = {
+        e.pitch + offset
+        for c in arrangement.channels
+        for e in c.events
+        for offset in (e.arp or (0,))
+    }
     assert {72, 69, 67, 64, 62, 60, 48} <= heard
 
 
@@ -273,19 +285,31 @@ def test_a_chord_re_entering_after_a_rest_still_reaches_lead_and_bass():
 
 def test_a_short_dense_chord_still_sounds_every_pitch():
     """A cycle shorter than its pitch set is where voices quietly went missing:
-    seven notes lasting 32ms each left room for two arpeggio steps."""
+    seven notes lasting 32ms each left room for two arpeggio steps.
+
+    Same overflow as above, so the fold is a no-op and exact pitch holds."""
     arrangement = arrange(
         score_of(*[note(p, 0.0, dur=0.032) for p in (72, 69, 67, 64, 62, 60, 48)])
     )
-    heard = {e.pitch for c in arrangement.channels for e in c.events}
+    heard = {
+        e.pitch + offset
+        for c in arrangement.channels
+        for e in c.events
+        for offset in (e.arp or (0,))
+    }
     assert {72, 69, 67, 64, 62, 60, 48} <= heard
 
 
 def test_sparse_writing_produces_no_arpeggio():
+    """`dur == 1.0` alone stopped meaning anything once the arpeggio became one
+    note instead of many: a spuriously arpeggiated sparse chord now keeps the
+    chord's own duration too. Absence of `arp` is what the name claims."""
     arrangement = arrange(
         score_of(note(72, 0.0, dur=1.0), note(64, 0.0, dur=1.0), note(48, 0.0, dur=1.0))
     )
-    assert all(e.dur == 1.0 for c in arrangement.channels for e in c.events)
+    assert all(
+        e.dur == 1.0 and not e.arp for c in arrangement.channels for e in c.events
+    )
 
 
 def test_the_arpeggio_never_overlaps_the_channel_s_own_notes():
@@ -376,16 +400,99 @@ def test_the_vibrato_threshold_decides_which_notes_get_it():
 
 
 def test_the_arpeggio_step_comes_from_config():
-    score = ingest(Path(__file__).parent / "fixtures" / "ragtime.mxl")
-    settings = replace(DEFAULTS, arp=replace(DEFAULTS.arp, step_sec=0.032))
-    events = [e for c in arrange(score, settings).channels if c.role == "inner_b" for e in c.events]
-    assert any(abs(e.dur - 0.032) < 1e-9 for e in events)
-    assert not any(abs(e.dur - 0.016) < 1e-9 for e in events)
+    """`[arp] rate_ms` only reaches the arranger by spreading onto the carrier's
+    own instrument (Task 2), so this must go through `merge` rather than a bare
+    `replace` — a hand-built config would leave `arp_rate_sec` at its default
+    and this test would pass for the wrong reason. The chord is short and
+    dense so its span is rate-dominated rather than chord-duration-dominated,
+    which is what lets the rate's effect show up in `dur` at all."""
+    score = score_of(
+        note(72, 0.0, dur=0.01), note(69, 0.0, dur=0.01),
+        note(67, 0.0, dur=0.01), note(64, 0.0, dur=0.01), note(48, 0.0, dur=0.01),
+    )
+    settings = merge(roster_of(3), "[arp]\nrate_ms = 32\n", "test")
+    event = channels(arrange(score, settings))["counter"].events[0]
+    assert event.arp
+    assert event.dur == pytest.approx(len(event.arp) * 0.032)
+    assert event.dur != pytest.approx(len(event.arp) * 0.016)
+
+
+def test_the_arpeggio_rate_travels_in_the_instrument_not_the_config():
+    """The test that excludes reading the config table.
+
+    `merge` sets `[arp] rate_ms` on the table *and* spreads it onto every
+    instrument, so the test above passes whichever of the two the arranger
+    reads. Moving only the carrier's instrument, with the table left at its
+    default, is what tells them apart — and it is exactly the case a
+    hand-edited arrangement with no config anywhere relies on.
+    """
+    settings = roster_of(3)
+    voices_cfg = settings.voices
+    carrier = voices_cfg.voices[1]
+    assert carrier.role == voices_cfg.arp, "count 3 puts the overflow on the counter"
+    settings = replace(
+        settings,
+        voices=replace(
+            voices_cfg,
+            voices=(
+                voices_cfg.voices[0],
+                replace(carrier, instrument=replace(carrier.instrument, arp_rate_sec=0.032)),
+                *voices_cfg.voices[2:],
+            ),
+        ),
+    )
+    assert settings.arp.step_sec == 0.048, "the table must stay put or this proves nothing"
+    score = score_of(
+        note(72, 0.0, dur=0.01), note(69, 0.0, dur=0.01),
+        note(67, 0.0, dur=0.01), note(64, 0.0, dur=0.01), note(48, 0.0, dur=0.01),
+    )
+    event = channels(arrange(score, settings))["counter"].events[0]
+    assert event.arp
+    assert event.dur == pytest.approx(len(event.arp) * 0.032)
 
 
 def test_the_default_argument_still_arranges():
     score = ingest(FIXTURE)
     assert arrange(score) == arrange(score, DEFAULTS)
+
+
+def test_overflow_becomes_one_cycling_event_not_a_burst_of_steps():
+    """The whole point of the phase: one note whose pitch cycles."""
+    arrangement = arrange(
+        score_of(note(72, 0.0), note(69, 0.0), note(67, 0.0), note(64, 0.0), note(48, 0.0)),
+        roster_of(3),
+    )
+    carried = channels(arrangement)["counter"].events
+    assert len(carried) == 1, "one event, not sixty-two"
+    event = carried[0]
+    assert event.pitch == 64, "the cycle is anchored on its lowest member"
+    assert event.arp == (0, 3, 5), "64, 67 and 69 as offsets from 64"
+    assert event.dur > 0.9, "and it lasts as long as the chord, not 16ms"
+
+
+def test_an_arpeggiated_event_does_not_also_waver():
+    """A pitch already stepping through a chord does not want a slow LFO too."""
+    arrangement = arrange(
+        score_of(note(72, 0.0), note(69, 0.0), note(67, 0.0), note(64, 0.0), note(48, 0.0)),
+        roster_of(3),
+    )
+    event = channels(arrangement)["counter"].events[0]
+    assert event.arp and event.vibrato is False
+    lead = channels(arrangement)["lead"].events[0]
+    assert not lead.arp and lead.vibrato is True, "the rule still applies elsewhere"
+
+
+def test_a_short_dense_chord_still_sounds_every_member():
+    """The rule the old `max(len(pitches), ...)` protected, kept."""
+    arrangement = arrange(
+        score_of(
+            note(72, 0.0, dur=0.01), note(69, 0.0, dur=0.01),
+            note(67, 0.0, dur=0.01), note(64, 0.0, dur=0.01), note(48, 0.0, dur=0.01),
+        ),
+        roster_of(3),
+    )
+    event = channels(arrangement)["counter"].events[0]
+    assert event.dur >= len(event.arp) * DEFAULTS.voices.voices[1].instrument.arp_rate_sec
 
 
 def roster_of(count):
@@ -413,9 +520,10 @@ def test_the_notes_a_dropped_voice_would_have_taken_reach_the_arpeggio():
         score_of(note(72, 0.0), note(69, 0.0), note(67, 0.0), note(64, 0.0), note(48, 0.0)),
         roster_of(3),
     )
-    carried = pitches(arrangement, "counter")
-    assert set(carried) == {69, 67, 64}
-    assert len(carried) > 3, "a cycle, not one note that happened to fit"
+    carried = channels(arrangement)["counter"].events
+    assert len(carried) == 1, "one cycling note, not a channel per dropped voice"
+    event = carried[0]
+    assert {event.pitch + offset for offset in event.arp} == {69, 67, 64}
 
 
 def test_four_voices_drop_only_inner_b_and_carry_on_inner_a():
@@ -432,3 +540,34 @@ def test_the_echo_follows_the_lead_at_every_count():
         arrangement = arrange(score_of(note(72, 0.0), note(48, 0.0)), roster_of(count))
         with_echo = [c.role for c in arrangement.channels if c.echo is not None]
         assert with_echo == ["lead"]
+
+
+def test_the_arpeggio_stays_inside_one_octave():
+    """The test that excludes taking overflow pitches as they lie.
+
+    Ragtime's widest overflow alternated F3 with A-flat4 — an octave and a
+    fourth, cycling nine times inside one 0.3 s event. Nothing about that
+    reads as a chord; it reads as a siren. A chip arpeggio names a chord by
+    cycling its members close together, so every member folds into the
+    octave above the lowest. Pitch class is what survives, register is not.
+    """
+    arrangement = arrange(
+        score_of(
+            note(53, 0.0, dur=0.3), note(68, 0.0, dur=0.3), note(72, 0.0, dur=0.3),
+            note(69, 0.0, dur=0.3), note(67, 0.0, dur=0.3), note(48, 0.0, dur=0.3),
+        )
+    )
+    arped = [e for c in arrangement.channels for e in c.events if e.arp]
+    assert arped, "a six-note chord must overflow"
+    for event in arped:
+        assert max(event.arp) < 12, f"{event.arp} leaps out of the octave"
+
+
+def test_the_default_arpeggio_is_slower_than_the_ear_fuses():
+    """Above roughly 20 Hz a cycle stops being heard as notes and becomes a
+    rough timbre — the reason the arpeggio sounded harsh even once it was in
+    tune. The hardware rate of one step per frame puts a two-note cycle at
+    31 Hz, squarely inside that band. The default has to clear it for the
+    smallest cycle there is, which is the two-note one."""
+    rate = DEFAULTS.voices.voices[1].instrument.arp_rate_sec
+    assert 1.0 / (2 * rate) < 20.0, "a two-note cycle must be heard as two notes"

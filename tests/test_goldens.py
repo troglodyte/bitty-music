@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from bitty.arrange import ARP_STEP_SEC, arrange
+from bitty.arrange import arrange
 from bitty.ingest import ingest
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -45,18 +45,23 @@ def test_every_source_note_is_heard(name):
     arpeggio step of its pitch falls inside its span. Merely finding the same
     pitch somewhere in the window would let a dropped note be excused by an
     unrelated voice that happens to be playing it.
+
+    The arpeggio half of that is deliberately weaker than the onset half, and
+    got weaker still when the cycle began folding into one octave: a folded
+    member matches its source note by pitch class, not by pitch. That is a
+    real loss and it is the price the fold was chosen for -- an overflowed
+    A-flat4 now sounds as A-flat3. What the fold must not do is lose the note
+    altogether, and pitch class is what still catches that.
     """
     score = ingest(FIXTURES / f"{name}.mxl")
     events = [e for c in arranged(name).channels for e in c.events]
     for note in score.notes:
         assert any(
-            e.pitch == note.pitch
-            and (
-                abs(e.t - note.start) <= EPSILON
-                or (
-                    abs(e.dur - ARP_STEP_SEC) < 1e-9
-                    and note.start - EPSILON <= e.t <= note.start + note.dur + EPSILON
-                )
+            (e.pitch == note.pitch and abs(e.t - note.start) <= EPSILON)
+            or (
+                e.arp
+                and (note.pitch - e.pitch) % 12 in e.arp
+                and note.start - EPSILON <= e.t <= note.start + note.dur + EPSILON
             )
             for e in events
         ), f"{note} never sounds"
@@ -74,6 +79,8 @@ def test_events_are_playable(name):
 def test_dense_writing_arpeggiates_and_sparse_writing_does_not():
     ragtime = {c.role: c.events for c in arranged("ragtime").channels}
     chorale = {c.role: c.events for c in arranged("chorale").channels}
-    steps = [e for e in ragtime["inner_b"] if abs(e.dur - 0.016) < 1e-9]
-    assert len(steps) > 50, "six-note ragtime chords should overflow into an arpeggio"
-    assert not [e for e in chorale["inner_b"] if abs(e.dur - 0.016) < 1e-9]
+    assert len([e for e in ragtime["inner_b"] if e.arp]) == 8, (
+        "ragtime overflows on eight onsets; a count, not a bool, because "
+        "arpeggiating only the first one would satisfy 'some event has arp'"
+    )
+    assert not [e for e in chorale["inner_b"] if e.arp]

@@ -23,7 +23,6 @@ from bitty.model import Note, Score
 from bitty.voices import Roster
 
 EPSILON = 1e-6  # onset times are floats; anything closer than this is one moment
-ARP_STEP_SEC = DEFAULTS.arp.step_sec  # kept: tests and goldens read this name
 
 DOWNBEAT_STRENGTH = 1.0
 SECONDARY_STRENGTH = 0.5
@@ -39,6 +38,7 @@ class _Take:
     pitch: int
     dur: float
     vel: int
+    arp: tuple[int, ...] = ()  # semitone offsets from `pitch`; () is a plain note
 
 
 Tracks = dict[str, list[_Take]]
@@ -47,7 +47,10 @@ Tracks = dict[str, list[_Take]]
 def arrange(score: Score, config: Config = DEFAULTS) -> Arrangement:
     roster = config.voices
     tracks, leftovers = _assign(score, roster)
-    tracks[roster.arp] = _arpeggiate(leftovers, tracks[roster.arp], config.arp.step_sec)
+    carrier = next(voice for voice in roster if voice.role == roster.arp)
+    tracks[roster.arp] = _arpeggiate(
+        leftovers, tracks[roster.arp], carrier.instrument.arp_rate_sec
+    )
 
     channels: list[Channel] = []
     for voice in roster:
@@ -205,7 +208,10 @@ def _events(takes: list[_Take], min_note_sec: float) -> tuple[Event, ...]:
             pitch=take.pitch,
             dur=take.dur,
             vel=take.vel,
-            vibrato=take.dur >= min_note_sec,
+            # A pitch already stepping through a chord does not also want a slow
+            # LFO; composed, the two read as mush rather than as either effect.
+            vibrato=not take.arp and take.dur >= min_note_sec,
+            arp=take.arp,
         )
         for take in takes
         if take.dur > EPSILON
@@ -232,9 +238,15 @@ def _accent(beat_strength: float) -> int:
 
 
 def _arpeggiate(
-    leftovers: list[tuple[float, list[Note]]], takes: list[_Take], step_sec: float
+    leftovers: list[tuple[float, list[Note]]], takes: list[_Take], rate_sec: float
 ) -> list[_Take]:
-    """Fold notes that found no channel into one fast-cycling line.
+    """Fold notes that found no channel into one cycling note.
+
+    One take, not one per step. A chip arpeggio is a single note whose pitch
+    register is rewritten each frame while its envelope keeps running; a fresh
+    note per step restarts the envelopes 60 times a second, which is how every
+    step came to sound a whole tone sharp on an instrument with a pitch
+    envelope.
 
     The channel's own note at that moment joins the cycle rather than being
     replaced by it, so the arpeggio carries the whole chord and not just the
@@ -249,38 +261,48 @@ def _arpeggiate(
         absorbed = [take for take in out if abs(take.t - onset) <= EPSILON]
         out = [take for take in out if abs(take.t - onset) > EPSILON]
 
-        pitches = sorted({n.pitch for n in notes} | {take.pitch for take in absorbed})
+        members = {n.pitch for n in notes} | {take.pitch for take in absorbed}
+        # Fold into the octave above the lowest member. Overflow arrives from
+        # whatever register it was written in, and a cycle that leaps an
+        # octave and a fourth nine times a second is a siren, not a chord --
+        # ragtime's F3 against A-flat4 was the case that made this audible.
+        # A chip arpeggio names a chord by cycling its members close
+        # together, so pitch class is the part worth keeping and register is
+        # the part spent to keep it. Folding before the set is built also
+        # collapses members an octave apart into one step rather than
+        # cycling the same pitch class twice.
+        low = min(members)
+        pitches = sorted({low + (pitch - low) % 12 for pitch in members})
         # The cycle lasts only as long as its shortest member: a note that has
-        # ended must not keep sounding just because the arpeggio is still running.
+        # ended must not keep sounding just because the arpeggio is still
+        # running. But it owes every member one step — a short dense chord, an
+        # ornament or a staccato stab, must still sound every note it was handed.
         span = min([n.dur for n in notes] + [take.dur for take in absorbed])
-        vel = max(
-            [_velocity(n) for n in notes] + [take.vel for take in absorbed]
+        span = max(span, len(pitches) * rate_sec)
+        vel = max([_velocity(n) for n in notes] + [take.vel for take in absorbed])
+        out.append(
+            _Take(
+                t=onset,
+                pitch=pitches[0],
+                dur=span,
+                vel=vel,
+                arp=tuple(pitch - pitches[0] for pitch in pitches),
+            )
         )
-        out.extend(_arp_cycle(onset, span, pitches, vel, step_sec))
 
     return _clip_overlaps(sorted(out, key=lambda take: take.t))
 
 
-def _arp_cycle(
-    onset: float, span: float, pitches: list[int], vel: int, step_sec: float
-) -> list[_Take]:
-    # At least one step per pitch. A short dense chord — an ornament, or a
-    # staccato stab — must still sound every note it was handed, even if the
-    # cycle then runs slightly past where the chord ended.
-    steps = max(len(pitches), int(span / step_sec))
-    return [
-        _Take(
-            t=onset + step * step_sec,
-            pitch=pitches[step % len(pitches)],
-            dur=step_sec,
-            vel=vel,
-        )
-        for step in range(steps)
-    ]
-
-
 def _clip_overlaps(takes: list[_Take]) -> list[_Take]:
-    """One channel, one note — including where a cycle runs into a held note."""
+    """One channel, one note — including where a cycle runs into a held note.
+
+    This outranks the "every member sounds at least once" span rule above.
+    A cycle stretched to `len(pitches) * rate_sec` may run past where its
+    chord ended, and if the channel's next note starts inside that stretch,
+    the cycle is cut there and its last steps go unheard. Two notes at once
+    on one channel is the worse fault: a chip channel cannot do it, so the
+    arrangement would be describing sound the target cannot make.
+    """
     for earlier, later in zip(takes, takes[1:]):
         if earlier.t + earlier.dur > later.t + EPSILON:
             earlier.dur = later.t - earlier.t

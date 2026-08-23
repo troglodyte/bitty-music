@@ -141,6 +141,16 @@ def _add_event(
         semitones = step_values(instrument.pitch_env, length, sample_rate)
         inc = inc * 2.0 ** (semitones / 12.0)
 
+    if event.arp:
+        # Cycling, not clamping. `step_values` sustains its last step, which is
+        # what an envelope does; an arpeggio comes back around. This is one note
+        # whose pitch register is rewritten each step, which is how the hardware
+        # does it — and why the envelopes above run once instead of restarting.
+        per_step = max(1, int(round(instrument.arp_rate_sec * sample_rate)))
+        offsets = np.asarray(event.arp, dtype=np.float64)
+        semitones = offsets[(np.arange(length) // per_step) % len(offsets)]
+        inc = inc * 2.0 ** (semitones / 12.0)
+
     if event.vibrato:
         # Composed with the pitch envelope, not replacing it: the blip is the
         # attack, the vibrato is the sustain.

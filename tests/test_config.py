@@ -1,7 +1,6 @@
 from pathlib import Path
 
 from bitty import arrangement, lfo, synth, voices
-from bitty.arrange import ARP_STEP_SEC
 from bitty.config import DEFAULTS
 from bitty.loop import MIN_LOOP_BARS, SEAM_RATIO
 
@@ -9,12 +8,13 @@ from bitty.loop import MIN_LOOP_BARS, SEAM_RATIO
 def test_defaults_match_the_constants_they_replace():
     """The guard that lets every other test in the suite stay untouched.
 
-    Most of these module constants (`arrange.ARP_STEP_SEC`, `loop.MIN_LOOP_BARS`,
-    `loop.SEAM_RATIO`) are now derived from `DEFAULTS`, so the assertions
-    against them are tautologies that can never fail — they document the
-    relationship rather than guard it. `output.sample_rate` is the one real
-    cross-check left: `synth.SAMPLE_RATE` is an independent literal, and this
-    assertion is the seam that keeps that pair honest.
+    Most of these module constants (`loop.MIN_LOOP_BARS`, `loop.SEAM_RATIO`)
+    are now derived from `DEFAULTS`, so the assertions against them are
+    tautologies that can never fail — they document the relationship rather
+    than guard it. `output.sample_rate` and `arp.step_sec` are the real
+    cross-checks left: `synth.SAMPLE_RATE` and `arrangement.ARP_RATE_SEC` are
+    independent literals, and these assertions are the seam that keeps each
+    pair honest.
     """
     assert DEFAULTS.echo.delay_beats == voices.ECHO_BEATS
     assert DEFAULTS.echo.level == voices.ECHO_LEVEL
@@ -22,7 +22,7 @@ def test_defaults_match_the_constants_they_replace():
     assert DEFAULTS.vibrato.delay_sec == arrangement.VIBRATO_DELAY
     assert DEFAULTS.vibrato.rate_hz == arrangement.VIBRATO_RATE_HZ
     assert DEFAULTS.vibrato.min_note_sec == lfo.MIN_NOTE_SEC
-    assert DEFAULTS.arp.step_sec == ARP_STEP_SEC
+    assert DEFAULTS.arp.step_sec == arrangement.ARP_RATE_SEC
     assert DEFAULTS.loop.min_bars == MIN_LOOP_BARS
     assert DEFAULTS.loop.seam_ratio == SEAM_RATIO
     assert DEFAULTS.output.sample_rate == synth.SAMPLE_RATE
@@ -40,6 +40,38 @@ import pytest
 
 from bitty.config import ConfigError, merge
 from dataclasses import replace
+
+
+def test_the_arp_rate_reaches_every_instrument():
+    """The synth reads the rate off the instrument, so the TOML must land there."""
+    result = merge(DEFAULTS, "[arp]\nrate_ms = 20\n", "test")
+    assert result.arp.step_sec == 0.02, "the config surface still resolves"
+    for voice in result.voices.voices:
+        assert voice.instrument.arp_rate_sec == 0.02
+
+
+def test_a_file_silent_on_the_arp_rate_leaves_instruments_alone():
+    """Spreading unconditionally would let an unrelated file undo an arp rate edit.
+
+    Unlike vibrato_cents, arp_rate_sec has no _INSTRUMENT_KEYS entry, so we
+    cannot express a per-voice override in TOML. Instead we build the starting
+    config by hand: a lead voice with a non-default rate (0.05, well away from
+    both 0.016 and 0.02). Then we merge an unrelated file that names no [arp]
+    table. Conditional spreading leaves the 0.05 alone; unconditional spreading
+    would overwrite it with the default 0.016.
+    """
+    by_role = {v.role: v for v in DEFAULTS.voices}
+    lead = by_role["lead"]
+    modified_instrument = replace(lead.instrument, arp_rate_sec=0.05)
+    modified_lead = replace(lead, instrument=modified_instrument)
+    modified_voices_tuple = tuple(
+        modified_lead if v.role == "lead" else v for v in DEFAULTS.voices
+    )
+    modified_roster = replace(DEFAULTS.voices, voices=modified_voices_tuple)
+    starting_config = replace(DEFAULTS, voices=modified_roster)
+
+    result = merge(starting_config, "[echo]\nlevel = 0.5\n", "test")
+    assert roles(result)["lead"].instrument.arp_rate_sec == 0.05
 
 
 def test_count_narrows_the_roster():

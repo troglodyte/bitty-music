@@ -340,3 +340,89 @@ def test_count_path_smoke_check_three_voices():
     assert levels[3] > 0.0 and levels[5] > 0.0
     ratio = levels[3] / levels[5]
     assert 0.5 < ratio < 2.0, f"three voices mixed at {ratio:.2f}x five voices"
+
+
+def arp_arrangement(instrument, pitch=69, dur=1.0, arp=()):
+    return Arrangement(
+        meta={"title": "t", "bpm": 120.0},
+        channels=(
+            Channel(
+                role="lead",
+                instrument=instrument,
+                events=(Event(t=0.0, pitch=pitch, dur=dur, vel=15, arp=arp),),
+            ),
+        ),
+    )
+
+
+def dominant_hz(audio, lo=0, hi=None):
+    """The loudest frequency in a slice of the render."""
+    mono = audio[lo:hi].mean(axis=1)
+    windowed = mono * np.hanning(len(mono))
+    spectrum = np.abs(np.fft.rfft(windowed))
+    return float(np.fft.rfftfreq(len(mono), 1 / SAMPLE_RATE)[np.argmax(spectrum)])
+
+
+def test_an_arpeggio_step_sounds_at_the_pitch_it_names():
+    """The bug this phase exists to fix.
+
+    Every step used to be its own 16 ms event, so it restarted the instrument's
+    pitch envelope and froze at index 0. A step naming A4 sounded at 499.7 Hz —
+    a whole tone sharp, `pitch_env`'s first value.
+    """
+    instrument = Instrument(
+        wave="pulse", duty=0.5, pitch_env=(2, 1, 0), volume_env=(15, 15, 15, 15)
+    )
+    plain = dominant_hz(render(arp_arrangement(instrument)))
+    arped = dominant_hz(render(arp_arrangement(instrument, arp=(0,))))
+    assert abs(plain - 440.0) < 6.0, "a plain A4 is the baseline"
+    assert abs(arped - plain) < 6.0, "a single-member arpeggio is just the note"
+
+
+def test_envelopes_run_once_across_an_arpeggio():
+    """Per-step events restarted the volume envelope 62 times a second."""
+    instrument = Instrument(wave="pulse", duty=0.5, volume_env=(15, 0))
+    audio = render(arp_arrangement(instrument, dur=0.5, arp=(0, 4, 7)))
+    head = float(np.abs(audio[:400]).max())
+    tail = float(np.abs(audio[-400:]).max())
+    assert head > 0.05, "the attack should sound"
+    assert tail < head * 0.2, "the envelope must decay across the event, not restart"
+
+def test_the_pitch_envelope_settles_instead_of_repeating_every_step():
+    """The measured defect, asserted directly.
+
+    At the default 16 ms rate a per-step implementation never advances the
+    1/60 s pitch envelope past index 0, so an A4 sounded at 499.7 Hz forever
+    instead of resolving to 440. This is the test that would have caught it.
+    """
+    instrument = Instrument(wave="pulse", duty=0.5, pitch_env=(2, 1, 0))
+    audio = render(arp_arrangement(instrument, dur=1.0, arp=(0,)))
+    late = dominant_hz(audio, lo=int(0.4 * SAMPLE_RATE))
+    assert abs(late - 440.0) < 10.0, f"the blip must resolve; got {late:.1f} Hz"
+    assert abs(late - 493.9) > 30.0, "not stuck a whole tone sharp"
+
+
+def test_the_arpeggio_cycles_rather_than_sustaining_its_last_offset():
+    """`step_values` clamps to its last step; an arpeggio comes back around."""
+    instrument = Instrument(wave="pulse", duty=0.5, arp_rate_sec=0.05)
+    step = int(0.05 * SAMPLE_RATE)
+    audio = render(arp_arrangement(instrument, dur=0.4, arp=(0, 12)))
+    # Sample the middle half of steps 0, 1, 2, 3 to avoid the edge fades.
+    pitches = [
+        dominant_hz(audio, lo=i * step + step // 4, hi=i * step + 3 * step // 4)
+        for i in range(4)
+    ]
+    assert abs(pitches[0] - 440.0) < 25.0
+    assert abs(pitches[1] - 880.0) < 40.0
+    assert abs(pitches[2] - 440.0) < 25.0, "step 2 must return to the first offset"
+    assert abs(pitches[3] - 880.0) < 40.0
+
+
+def test_the_arp_rate_comes_from_the_instrument():
+    """A hand-edited file renders the same with no config anywhere."""
+    slow = Instrument(wave="pulse", duty=0.5, arp_rate_sec=0.2)
+    audio = render(arp_arrangement(slow, dur=0.4, arp=(0, 12)))
+    early = dominant_hz(audio, lo=int(0.05 * SAMPLE_RATE), hi=int(0.15 * SAMPLE_RATE))
+    late = dominant_hz(audio, lo=int(0.25 * SAMPLE_RATE), hi=int(0.35 * SAMPLE_RATE))
+    assert abs(early - 440.0) < 25.0
+    assert abs(late - 880.0) < 40.0, "a 0.2s rate holds each offset far longer"
