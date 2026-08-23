@@ -347,6 +347,7 @@ a passage should not mean navigating a tree.
 | `dur` | Seconds. |
 | `vel` | 0–15. Sixteen levels is what a chip channel actually has; the coarse steps are the texture, not a loss. |
 | `vibrato` | A delayed pitch LFO — 25 cents at 5.5 Hz, fading in after 300 ms. |
+| `arp` | Semitone offsets from `pitch`, cycled at the instrument's `arp_rate_sec`. Empty means a plain note. One event, not one per step — the envelopes run once across the whole figure, which is what keeps an arpeggiated pitch in tune. Always under 12: members are folded into the octave above the lowest, so a cycle names a chord instead of leaping. |
 
 **Instrument fields** — everything past `wave` is optional.
 
@@ -359,6 +360,7 @@ a passage should not mean navigating a tree.
 | `cutoff_hz` | `null` means no filtering at all. |
 | `resonance` | Biquad Q. `0.7071` is flat; higher peaks. |
 | `quantize` | Triangle amplitude steps — `16` for an NES-ish bass. |
+| `arp_rate_sec` | Seconds per arpeggio step; `0.048` by default. It travels here rather than in config so a hand-edited arrangement renders the same anywhere. Not the hardware's one-step-per-frame `0.016`: at that rate a two-note cycle alternates at 31 Hz, which the ear fuses into a rough timbre rather than hearing as notes. |
 
 A field this build does not recognize is dropped rather than fatal, so an
 arrangement written by a newer bitty still renders with what is understood.
@@ -448,7 +450,7 @@ delay_beats = 0.75      # 0.0-16.0, in beats
 level = 0.35            # 0.0-1.0
 
 [arp]
-rate_ms = 16.0           # >=1.0; the overflow arpeggio's step time
+rate_ms = 48.0           # >=1.0; the overflow arpeggio's step time
 
 [vibrato]
 depth_cents = 25.0       # 0.0-1200.0
@@ -581,7 +583,25 @@ done: `[voices] count`, narrowing the roster down to as few as three
 voices, and `nes-tight` at `count = 4` — closer to the NES's true
 two-pulses-and-a-triangle roster than the five-voice default, though not
 that roster itself; an audition found `count = 3` overflows into a
-near-continuous arpeggio on a dense score.
+near-continuous arpeggio on a dense score. Phase 7 is done: that arpeggio
+now plays in tune, and sounds like an arpeggio. Three things changed, and
+the audition needed all three. An overflowing chord emits one event
+carrying its semitone offsets instead of one 16 ms event per step, so the
+envelopes run once across the figure rather than restarting sixty-two
+times a second — before this, every step sounded a whole tone sharp on any
+instrument with a `pitch_env`. That fixed the pitch and left the texture:
+at one step per frame a two-note cycle alternates at 31 Hz, which the ear
+hears as roughness rather than as notes, so the default step went to
+48 ms. And members now fold into the octave above the lowest — ragtime's
+widest overflow had been alternating F3 with A-flat4, an octave and a
+fourth, nine times inside one event.
+
+Folding costs something real: an overflowed note keeps its pitch class but
+not its register. `test_every_source_note_is_heard` says so, and matches
+arpeggio members by pitch class rather than pitch.
+
+`nes-tight` stays at `count = 4`. Whether `count = 3` is musical is a
+question about the reduction rather than the arpeggio, and is still open.
 
 Deliberately still ahead: `[transform]` (`transpose`, `tempo_scale`) as its
 own phase with its own auditions, tail-wrapping, deferred since Phase 4b
