@@ -276,8 +276,20 @@ bar it falls.
 sounding texture is pinned to the lead channel and the bottom to the bass, and
 everything in between goes to whichever channel's last pitch is nearest. A
 channel is monophonic, so a note landing on a busy channel truncates what it was
-holding. Anything that finds no channel at all is folded into a fast-cycling
-arpeggio rather than dropped.
+holding. Anything that finds no channel at all goes to the reduction policy, which
+drops it, folds it into an arpeggio, or lets it displace a doubling:
+
+1. A leftover whose pitch class is already sounding is dropped — it adds
+   nothing the ear can hear.
+2. What survives becomes an arpeggio only if it makes a cycle of three or
+   more distinct pitches. Two notes alternating is a trill, not a chord, so
+   the leftover is dropped and the channel keeps its own note.
+3. If that would cost the chord its only third, and the channel's own note
+   is a doubling of something already sounding, the third takes its place.
+
+Silence is a real outcome. Reducing four-part writing to three voices means
+a part goes, and a piece that arpeggiates everything it cannot fit spends
+its whole texture on the overflow.
 
 The naive alternative — re-sort each chord top-to-bottom and hand slot one the
 highest note — produces a melody that teleports whenever an inner voice briefly
@@ -520,15 +532,14 @@ A dropped voice's `[voices.<role>]` overrides are still accepted; they
 just have nothing to apply to unless a later config layer raises `count`
 again.
 
-**Count 3 is legal but not yet musical for a dense score.** With only one
-middle voice, `_pick_middle` can place at most one note per onset, and
-everything else overflows into the arpeggio on `counter`. Measured on the
-shipped fixtures, that overflow dominates: the minuet's arp carrier fires
-819 times at `count = 3` versus 35 at `count = 4` (16.7% of its notes
-overflow, most of it landing as a near-continuous 16ms trill); chorale and
-ragtime show the same pattern. `nes-tight` therefore ships at `count = 4`
-rather than the honest 3. Making 3 sound good is arranger work — spreading
-overflow more gently, or giving it a second carrier — not yet done.
+**Count 3 leans on the reduction policy.** With only one middle voice,
+`_pick_middle` can place at most one note per onset and everything else
+overflows. Before the policy existed that overflow dominated — the chorale's
+carrier arpeggiated through 92.2% of the piece, all of it two-note trills.
+The policy drops what is already sounding and refuses to arpeggiate anything
+that cannot name a chord, which takes the chorale and the minuet to no
+arpeggio at all and ragtime to 26.1%. The cost is harmonic: a few chords per
+piece lose their third where no doubling was free to displace.
 
 ### Milliseconds in the file, seconds in the code
 
