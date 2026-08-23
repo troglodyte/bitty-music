@@ -608,16 +608,46 @@ widest overflow had been alternating F3 with A-flat4, an octave and a
 fourth, nine times inside one event.
 
 Folding costs something real: an overflowed note keeps its pitch class but
-not its register. `test_every_source_note_is_heard` says so, and matches
-arpeggio members by pitch class rather than pitch.
+not its register. `test_every_source_note_is_heard` says so: a note excuses
+itself only when its pitch class is genuinely sounding in the arrangement at
+that moment, on any channel, arpeggio members included — not by checking the
+source score, which would let two notes that both got dropped excuse each
+other while the pitch class vanished from the output with nothing to catch
+it.
 
-`nes-tight` stays at `count = 4`. Whether `count = 3` is musical is a
-question about the reduction rather than the arpeggio, and is still open.
+Phase 8 is done: overflow is no longer folded into an arpeggio
+unconditionally. Three rules judge it first. A leftover whose pitch class is
+already sounding is dropped — it adds nothing the ear can hear. What
+survives becomes an arpeggio only if it names a cycle of three or more
+distinct pitches; two notes alternating is a trill, not a chord, so the
+leftover is dropped instead and the channel keeps its own note. And where
+that would cost a chord its only third, and the channel's own note is a
+doubling of something already sounding, the third takes that note's place
+rather than being lost. The measured effect is large: the chorale's carrier
+arpeggiated through 92.2% of the piece before this and 0.0% after; the
+minuet goes from 66.7% to 0.0%; ragtime falls from 59.8% to 26.1% at
+`count = 3`, from 41.5% to 2.1% at `nes-tight`'s `count = 4`, and from
+15.6% to 2.1% at the `count = 5` default. None of that is free: dropping
+notes loses harmony the previous implementation never lost, since it kept
+every note. A handful of chords per fixture now sound without a third that
+used to be there — seven on the chorale and four on ragtime at `count = 3`,
+five on ragtime at `count = 4`, none on the minuet or on ragtime at
+`count = 5`.
+
+`nes-tight` stays at `count = 4`. Whether `count = 3` is musical remains
+open — the arpeggio's share of the piece is gone or much reduced, which is
+what an audition can measure without listening, but whether the result
+sounds reduced or sounds thin has not been heard. Nor have `nes-tight` and
+the `count = 5` default themselves: both now sound different from the
+arpeggio Phase 7 auditioned and accepted, so both need a fresh listen before
+this phase is really finished.
 
 Deliberately still ahead: `[transform]` (`transpose`, `tempo_scale`) as its
 own phase with its own auditions, tail-wrapping, deferred since Phase 4b
 pending an audition of its own, and a musical `count = 3` — the honest
-two-pulse NES roster, blocked on arranger work to soften the overflow.
+two-pulse NES roster, blocked on an audition rather than more
+implementation: Phase 8 already stopped the overflow that used to
+arpeggiate through the whole piece.
 
 Design documents and per-phase implementation plans live in
 `docs/superpowers/`.
