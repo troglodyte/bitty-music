@@ -262,3 +262,38 @@ the `count = 3` question was not signed off and remains open.
 "sounds right" came apart here, and the divergence was arithmetic —
 `1 / (len(arp) * rate)` against the roughness band, and the count of two-note
 cycles. Compute both before an audition rather than after one.
+
+## Re-audition of `count = 3` (2026-08-23)
+
+The open question Phase 7 parked: with the arpeggio in tune, does `count = 3`
+need a reduction-policy change, or was the broken effect the whole problem?
+
+Measured first, per the rule this spec added, on all three fixtures:
+
+| fixture | arp share of the piece | cycle Hz | two-note cycles | max span |
+|---------|-----------------------|----------|-----------------|----------|
+| chorale | 92.2%                 | 10.4     | 36/36           | 8 st     |
+| minuet  | 54.2%                 | 10.4–20.8| 25/26           | 9 st     |
+| ragtime | 43.0%                 | 5.2–10.4 | 20/40           | 9 st     |
+
+At `count = 4` the chorale and the minuet arpeggiate **not at all**; only
+ragtime overflows, at 30.5%. So `count = 3` is not a slightly denser `count =
+4`, it is a different arrangement problem: the third voice is the only middle
+voice, and everything that will not fit in it becomes arpeggio.
+
+**Both Phase 7 fixes hold.** Every span is inside an octave — 0 of 102 arp
+events exceed 11 semitones, against the fifteen-semitone leaps that forced the
+fold — and cycle rates sit at 5–21 Hz, essentially clear of the 15–75 Hz
+roughness band. The numbers that justified `nes-tight`'s `count = 4` are
+obsolete: the minuet's 819 sixteen-millisecond steps are now 263 forty-eight-
+millisecond ones, and 80.6% of the piece is now 54.2%.
+
+**Audition verdict: better, still not musical.** The harshness is gone. What
+is left is a chorale whose entire middle voice is a two-note trill for 14.75
+of its 16 seconds — a correct effect applied to far too much of the piece.
+
+This resolves the risk this spec named as "the fix may not rescue `count = 3`."
+It did not, and the reason is now specific enough to plan against: **the defect
+is proportion, not pitch.** A reduction-policy phase is real work rather than a
+contingency, and its target is the share of the piece that overflows, not how
+the overflow sounds. `nes-tight` stays at `count = 4`.

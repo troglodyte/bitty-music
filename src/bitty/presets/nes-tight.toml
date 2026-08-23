@@ -5,13 +5,15 @@
 #
 # count = 3 would be the honest roster, but is not shippable yet: at three
 # voices there is only one middle voice, so `_pick_middle` can place at most
-# one note per onset and everything else overflows into `_arpeggiate`. On the
-# minuet fixture that turns 26 overflowed notes into 819 sixteen-millisecond
-# arp steps — 80.6% of the piece on the duty-0.125 narrow pulse, a
-# near-continuous trill rather than a musical line. An audition confirmed it
-# sounds harsh and wrong. Making count 3 musical is arranger work (spreading
-# overflow more gently, or a second arp carrier) that is its own later phase;
-# until then this preset uses count = 4.
+# one note per onset and everything else overflows into `_arpeggiate`. The
+# arpeggio itself is fine now — Phase 7 put it in tune — so what is left is
+# a question of proportion. Re-auditioned 2026-08-23: the chorale spends 92%
+# of its length with its entire middle voice on a two-note arpeggio, the
+# minuet 54%, ragtime 43%; at count = 4 the first two do not arpeggiate at
+# all. The verdict was "better, still not musical" — a correct effect
+# covering far too much of the piece. Making count = 3 musical is arranger
+# work (spreading overflow more gently, or a second arp carrier) that is its
+# own later phase; until then this preset uses count = 4.
 
 [voices]
 count = 4
