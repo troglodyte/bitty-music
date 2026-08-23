@@ -100,7 +100,8 @@ fixture   count   arp share now   after
 chorale       3           92.2%    0.0%
 minuet        3           66.7%    0.0%
 ragtime       3           59.8%   26.1%
-ragtime       4           15.6%    2.1%   <- the default preset
+ragtime       4           41.5%    2.1%   <- the nes-tight preset
+ragtime       5           15.6%    2.1%   <- DEFAULTS, and the goldens
 ```
 
 Every surviving ragtime cycle at `count = 3` is a 3- or 4-member chord: the
@@ -128,9 +129,11 @@ movements per fixture. The residue is chords where the carrier's own note
 was not redundant either, so no swap is free.
 
 An alternative was measured and rejected: protecting every only-third by
-keeping its two-member cycle zeroes the hollow count but pushes ragtime at
-`count = 4` to 28.7% arpeggio, worse than the 15.6% it ships today. Rule 3
-buys the same harmonic protection without reintroducing trills.
+keeping its two-member cycle. It zeroes the hollow count on every fixture,
+but it does so by preserving the exact defect this phase exists to remove —
+ragtime at `count = 4` lands on 28.7% arpeggio against rule 3's 2.1%, and
+fourteen of those cycles are two-member trills. Rule 3 buys the same
+harmonic protection and reintroduces no trills at all.
 
 ## Scope
 
@@ -173,9 +176,10 @@ in this spec rather than regenerating and accepting.
 
 ## Risks
 
-**The default preset changes.** Ragtime's arpeggios fall from 15.6% to 2.1%
-at `count = 4` — sound Phase 7 auditioned and accepted. This phase needs a
-re-audition of the **default**, not only of `count = 3`. If the default
+**The shipped presets change.** Ragtime's arpeggios fall from 41.5% to 2.1%
+at `count = 4`, the `nes-tight` preset, and from 15.6% to 2.1% at `DEFAULTS`
+— sound Phase 7 auditioned and accepted. This phase needs a re-audition of
+both, not only of `count = 3`. If the default
 loses something the stride idiom wants, rule 2's three-member threshold is
 where to negotiate; nothing else in the policy is tunable by design.
 
@@ -186,6 +190,6 @@ the cost stays visible rather than assumed.
 
 **Metric definition.** "Arp share" here is arpeggiated duration as a
 fraction of the carrier channel's sounding duration. Phase 7's re-audition
-quoted 30.5% for ragtime at `count = 4` where this spec measures 15.6%; the
+quoted 30.5% for ragtime at `count = 4` where this spec measures 41.5%; the
 two are not the same measure. The metric added in this phase is the
 definition that should be quoted from here on.
