@@ -645,9 +645,30 @@ the numbers did not predict: at `count = 3` the arp carrier moves from
 `inner_a` to `counter`, so the preset's own `duty = 0.125` override is
 what ragtime's remaining arpeggio sounds like.
 
+Tail-wrapping is closed, not deferred. It had been carried since Phase 4b
+pending an audition, on the rule that the loop cascade never modifies audio:
+the echo still ringing when the loop end arrives is cut, reported as "echo tail
+cut" rather than rejected, because whether it is audible is a call for a
+person. Auditioned 2026-08-23 and the answer is no. The tail was isolated by
+rendering only the events that begin before the loop end, untruncated, so
+whatever sounds past `end_sec` is exactly what the loop discards: 0.38s at
+-14.3 dB on the chorale, 0.15s at -11.6 dB on ragtime, and nothing at all on
+the minuet, whose loop ends where nothing is ringing. That matches what 4b
+measured, so nothing in Phases 5 through 8 moved it. Only `lead` carries an
+echo tap, so in both cases the loss is a single repeat of the loop's last lead
+note. Against an A/B that summed the discarded tail back onto the loop's own
+head — what implementing tail-wrapping would sound like — the seam is not
+audibly different, and neither version has an audible hole. The cascade keeps
+its rule and the audio stays untouched.
+
+One thing that fell out of the measurement: a wrap would not have clashed
+either. The chorale's last lead F#4 is already in its opening chord and
+ragtime's G#4 is an octave over its opening lead, which is what a loop that
+comes around tends to do. So the null result is about audibility, not about
+having dodged a harmonic problem.
+
 Deliberately still ahead: `[transform]` (`transpose`, `tempo_scale`) as its
-own phase with its own auditions, and tail-wrapping, deferred since Phase 4b
-pending an audition of its own.
+own phase with its own auditions.
 
 Design documents and per-phase implementation plans live in
 `docs/superpowers/`.
