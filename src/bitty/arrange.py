@@ -14,12 +14,13 @@ recognizable tune and note soup.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from itertools import groupby
 
 from bitty.arrangement import MAX_VELOCITY, Arrangement, Channel, Echo, Event
 from bitty.config import DEFAULTS, Config, EchoSettings
 from bitty.model import Note, Score
+from bitty.reduce import OCTAVE, Cycle, Displace, Drop, decide
 from bitty.voices import Roster
 
 EPSILON = 1e-6  # onset times are floats; anything closer than this is one moment
@@ -49,7 +50,7 @@ def arrange(score: Score, config: Config = DEFAULTS) -> Arrangement:
     tracks, leftovers = _assign(score, roster)
     carrier = next(voice for voice in roster if voice.role == roster.arp)
     tracks[roster.arp] = _arpeggiate(
-        leftovers, tracks[roster.arp], carrier.instrument.arp_rate_sec
+        leftovers, tracks, roster, carrier.instrument.arp_rate_sec
     )
 
     channels: list[Channel] = []
@@ -238,59 +239,101 @@ def _accent(beat_strength: float) -> int:
 
 
 def _arpeggiate(
-    leftovers: list[tuple[float, list[Note]]], takes: list[_Take], rate_sec: float
+    leftovers: list[tuple[float, list[Note]]],
+    tracks: Tracks,
+    roster: Roster,
+    rate_sec: float,
 ) -> list[_Take]:
-    """Fold notes that found no channel into one cycling note.
+    """Give the overflow to the policy, then build what it asks for.
 
-    One take, not one per step. A chip arpeggio is a single note whose pitch
-    register is rewritten each frame while its envelope keeps running; a fresh
-    note per step restarts the envelopes 60 times a second, which is how every
-    step came to sound a whole tone sharp on an instrument with a pitch
-    envelope.
+    One take per cycle, not one per step. A chip arpeggio is a single note
+    whose pitch register is rewritten each frame while its envelope keeps
+    running; a fresh note per step restarts the envelopes 60 times a second,
+    which is how every step came to sound a whole tone sharp on an instrument
+    with a pitch envelope.
 
-    The channel's own note at that moment joins the cycle rather than being
-    replaced by it, so the arpeggio carries the whole chord and not just the
-    part that would otherwise have been lost.
+    `tracks` is read, never written: the policy judges each onset against the
+    texture as `_assign` left it, so an earlier cycle cannot change the verdict
+    on a later one. The carrier's own notes arrive through `out`, as copies —
+    `out` holds `_Take`s the `Displace` arm below mutates in place, and a
+    shallow `list()` of `tracks[roster.arp]` would share those same objects
+    with `tracks`, letting a rewritten pitch leak back into a later onset's
+    `_pitch_classes` reading.
     """
-    out = list(takes)
+    out = [replace(take) for take in tracks[roster.arp]]
 
     for onset, notes in leftovers:
         # Partition rather than remove-by-value: `_Take` is a mutable dataclass
         # with structural equality, so `list.remove` would match any take that
         # merely looks the same.
         absorbed = [take for take in out if abs(take.t - onset) <= EPSILON]
-        out = [take for take in out if abs(take.t - onset) > EPSILON]
-
-        members = {n.pitch for n in notes} | {take.pitch for take in absorbed}
-        # Fold into the octave above the lowest member. Overflow arrives from
-        # whatever register it was written in, and a cycle that leaps an
-        # octave and a fourth nine times a second is a siren, not a chord --
-        # ragtime's F3 against A-flat4 was the case that made this audible.
-        # A chip arpeggio names a chord by cycling its members close
-        # together, so pitch class is the part worth keeping and register is
-        # the part spent to keep it. Folding before the set is built also
-        # collapses members an octave apart into one step rather than
-        # cycling the same pitch class twice.
-        low = min(members)
-        pitches = sorted({low + (pitch - low) % 12 for pitch in members})
-        # The cycle lasts only as long as its shortest member: a note that has
-        # ended must not keep sounding just because the arpeggio is still
-        # running. But it owes every member one step — a short dense chord, an
-        # ornament or a staccato stab, must still sound every note it was handed.
-        span = min([n.dur for n in notes] + [take.dur for take in absorbed])
-        span = max(span, len(pitches) * rate_sec)
-        vel = max([_velocity(n) for n in notes] + [take.vel for take in absorbed])
-        out.append(
-            _Take(
-                t=onset,
-                pitch=pitches[0],
-                dur=span,
-                vel=vel,
-                arp=tuple(pitch - pitches[0] for pitch in pitches),
-            )
+        decision = decide(
+            notes=tuple(notes),
+            carrier=tuple(take.pitch for take in absorbed),
+            sounding=_pitch_classes(tracks, onset),
+            others=_pitch_classes(tracks, onset, without=roster.arp),
+            bass=_held(tracks[roster.bass], onset),
         )
 
+        match decision:
+            case Displace(pitch=pitch):
+                # A plain note, not a cycle: the carrier sings the third
+                # instead of the doubling, and its duration is untouched so
+                # nothing can overlap what follows.
+                for take in absorbed:
+                    take.pitch = pitch
+            case Cycle(pitches=pitches, keep=keep):
+                out = [take for take in out if abs(take.t - onset) > EPSILON]
+                # The cycle lasts only as long as its shortest member: a note
+                # that has ended must not keep sounding just because the
+                # arpeggio is still running. But it owes every member one step
+                # — a short dense chord must still sound every note it was
+                # handed.
+                span = min([n.dur for n in keep] + [take.dur for take in absorbed])
+                span = max(span, len(pitches) * rate_sec)
+                vel = max([_velocity(n) for n in keep] + [take.vel for take in absorbed])
+                out.append(
+                    _Take(
+                        t=onset,
+                        pitch=pitches[0],
+                        dur=span,
+                        vel=vel,
+                        arp=tuple(pitch - pitches[0] for pitch in pitches),
+                    )
+                )
+            case Drop():
+                pass
+            case _:
+                # `match` falls through silently on an unmatched case rather
+                # than raising, so a fourth `Decision` type would otherwise
+                # vanish here without a trace instead of failing loudly.
+                raise TypeError(f"unhandled reduce decision: {decision!r}")
+
     return _clip_overlaps(sorted(out, key=lambda take: take.t))
+
+
+def _held(takes: list[_Take], onset: float) -> int | None:
+    """The pitch this channel is sounding at `onset`, scanning the whole line.
+
+    `_sounding` inspects only the last take, which is right while `_assign` is
+    still appending to it and wrong once the line is complete: by the time the
+    policy runs, the note at `onset` is somewhere in the middle.
+    """
+    for take in takes:
+        if take.t <= onset + EPSILON and take.t + take.dur > onset + EPSILON:
+            return take.pitch
+    return None
+
+
+def _pitch_classes(tracks: Tracks, onset: float, *, without: str | None = None) -> frozenset[int]:
+    """Every pitch class audible at `onset`, optionally ignoring one channel."""
+    return frozenset(
+        take.pitch % OCTAVE
+        for role, takes in tracks.items()
+        if role != without
+        for take in takes
+        if take.t <= onset + EPSILON and take.t + take.dur > onset + EPSILON
+    )
 
 
 def _clip_overlaps(takes: list[_Take]) -> list[_Take]:

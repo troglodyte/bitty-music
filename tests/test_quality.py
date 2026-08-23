@@ -7,12 +7,15 @@ before Phase 3b began.
 """
 
 import statistics
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
-from bitty.arrange import arrange
+from bitty.arrange import _assign, arrange
+from bitty.config import DEFAULTS
 from bitty.ingest import ingest
+from bitty.voices import Roster
 
 FIXTURES = Path(__file__).parent / "fixtures"
 EPSILON = 1e-6
@@ -78,3 +81,112 @@ def test_dynamics_are_not_flat(name):
     arrangement = arrange(ingest(FIXTURES / f"{name}.mxl"))
     levels = {e.vel for c in arrangement.channels for e in c.events}
     assert len(levels) > 1, f"{name} renders at a single dynamic level"
+
+
+THIRDS = (3, 4)  # minor and major; a tenth is a third folded into the octave
+
+# (fixture, count): (max arp share %, max hollow chords)
+# Phase 8. The chorale-3, minuet-3, and all three ragtime rows are spec-backed
+# (measured-outcome table in the design doc); their hollow counts are the
+# harmony that shrinking the arp share costs, which rule 3 reduces but does
+# not eliminate. The chorale-4/5 and minuet-4/5 rows are not in the spec's
+# table at all -- at those counts both fixtures produce zero leftover onsets,
+# so there is no overflow for either assertion to measure. They stay in the
+# table as a tripwire: if a future change ever makes these counts overflow,
+# these rows start meaning something.
+REDUCTION = {
+    ("chorale", 3): (0.1, 7),
+    ("chorale", 4): (0.1, 0),
+    ("chorale", 5): (0.1, 0),
+    ("minuet", 3): (0.1, 0),
+    ("minuet", 4): (0.1, 0),
+    ("minuet", 5): (0.1, 0),
+    ("ragtime", 3): (26.2, 4),
+    ("ragtime", 4): (2.2, 5),
+    ("ragtime", 5): (2.2, 0),
+}
+
+# The hollow-chord side of this table is proven, not just asserted: with
+# `_arpeggiate` in `src/bitty/arrange.py` patched to `continue` at the top of
+# its `for onset, notes in leftovers:` loop -- discarding overflow instead of
+# folding it into a cycle -- 5 of these 9 cases failed on the `hollow`
+# assertion itself, not just `arp share`: chorale-3 measured 9 against a
+# ceiling of 0, minuet-3 measured 3, ragtime-3 measured 18, ragtime-4
+# measured 14, and ragtime-5 measured 7. That confirms `_hollow` detects a
+# real lost third under a drop-everything policy rather than only ever
+# tripping on cycle duration. The final whole-branch review independently
+# reproduced this break.
+
+
+def _sounding(takes, onset):
+    """The takes on one channel still ringing at `onset`."""
+    return [t for t in takes if t.t <= onset + EPSILON and t.t + t.dur > onset + EPSILON]
+
+
+def _arp_share(arrangement, roster):
+    """Arpeggiated duration as a fraction of the carrier's sounding duration."""
+    events = next(
+        (c.events for c in arrangement.channels if c.role == roster.arp), ()
+    )
+    total = sum(e.dur for e in events)
+    arped = sum(e.dur for e in events if e.arp)
+    return 100.0 * arped / total if total else 0.0
+
+
+def _hollow(score, arrangement, roster):
+    """Overflow chords that had a third and end up without one.
+
+    Measured at the onsets where reduction actually had a decision to make,
+    which is what the policy is answerable for. The bass reference is the
+    arrangement's own bass channel: a third is a third above what is heard
+    underneath it, not above a note that was itself reduced away.
+    """
+    tracks, leftovers = _assign(score, roster)
+    played = {c.role: c.events for c in arrangement.channels}
+
+    def pitch_classes(onset):
+        out = set()
+        for events in played.values():
+            for event in _sounding(events, onset):
+                for offset in event.arp or (0,):
+                    out.add((event.pitch + offset) % OCTAVE)
+        return out
+
+    hollow = chords = 0
+    for onset, notes in leftovers:
+        bass = _sounding(played.get(roster.bass, ()), onset)
+        if not bass:
+            continue
+        root = bass[0].pitch
+        before = {n.pitch % OCTAVE for n in notes} | {
+            t.pitch % OCTAVE
+            for takes in tracks.values()
+            for t in _sounding(takes, onset)
+        }
+        if not any((p - root) % OCTAVE in THIRDS for p in before):
+            continue  # the chord never had a third to lose
+        chords += 1
+        if not any((p - root) % OCTAVE in THIRDS for p in pitch_classes(onset)):
+            hollow += 1
+    return hollow, chords
+
+
+@pytest.mark.parametrize("name,count", sorted(REDUCTION))
+def test_the_reduction_stays_within_its_arp_and_hollow_ceilings(name, count):
+    """The arpeggio's share of the piece, and the harmony it costs to shrink it.
+
+    Phase 7's re-audition named this share as the defect. A ceiling rather than
+    an equality: the numbers may improve without editing this table, but a
+    silent regression back toward a carrier that trills through the whole piece
+    fails here.
+    """
+    max_share, max_hollow = REDUCTION[(name, count)]
+    roster = Roster(count=count)
+    score = ingest(FIXTURES / f"{name}.mxl")
+    arrangement = arrange(score, replace(DEFAULTS, voices=roster))
+
+    share = _arp_share(arrangement, roster)
+    hollow, _ = _hollow(score, arrangement, roster)
+
+    assert share <= max_share, f"{name} count={count} arp share {share:.1f}%"
+    assert hollow <= max_hollow, f"{name} count={count} hollow chords {hollow}"

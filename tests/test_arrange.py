@@ -223,8 +223,12 @@ def test_when_every_channel_is_busy_the_nearest_one_is_stolen():
     assert inner_a[0].dur == 1.0
 
 
-def test_a_six_note_chord_arpeggiates_the_overflow():
-    """One cycling note stepping through the leftovers, reading as a chord."""
+def test_a_six_note_chord_drops_the_overflow_that_cant_form_a_chord():
+    """The leftover note (62) folds with the carrier's own note (64) to just
+    two pitches -- 62 and 64 are a tone apart, and no fold widens that. Two
+    pitches is a trill, not a chord, so rule 2 drops the leftover rather than
+    cycling it. Nothing rescues it either: 62 is not the chord's third above
+    the bass. The carrier keeps its own note, untouched."""
     arrangement = arrange(
         score_of(
             note(72, 0.0, dur=1.0),
@@ -235,21 +239,30 @@ def test_a_six_note_chord_arpeggiates_the_overflow():
             note(48, 0.0, dur=1.0),
         )
     )
-    arp = channels(arrangement)["inner_b"].events
-    assert len(arp) == 1
-    event = arp[0]
-    assert event.dur == 1.0
-    # the channel's own note joins the cycle rather than being replaced by it
-    assert event.pitch == 62
-    assert event.arp == (0, 2)
+    inner_b = channels(arrangement)["inner_b"].events
+    assert len(inner_b) == 1
+    assert inner_b[0].pitch == 64
+    assert inner_b[0].dur == 1.0
+    assert inner_b[0].arp == (), "two pitches can't cycle; the carrier stays plain"
+    heard = {
+        e.pitch + offset
+        for c in arrangement.channels
+        for e in c.events
+        for offset in (e.arp or (0,))
+    }
+    assert 62 not in heard, "the dropped note must not sneak back in anywhere"
 
 
-def test_nothing_is_dropped_when_the_channels_run_out():
-    """These seven pitches leave an overflow of 60, 62, 64 — inside one octave,
-    so the fold is a no-op here and every note survives at its own pitch. That
-    is deliberate: exact pitch is the strongest thing that can be asserted, and
-    it only holds when the overflow already fits. Once it does not, the fold
-    trades register for closeness and only pitch class survives, which is what
+def test_a_doubled_pitch_class_and_an_unrescuable_pair_are_dropped():
+    """One note wider than the six-note case above. 60 duplicates a pitch
+    class already sounding (72 and 48 are both C), so rule 1 drops it before
+    the fold even runs. That leaves 62 alone against the carrier's own note
+    (64) -- the same two-pitch, no-third situation as above -- so rule 2
+    drops it too. Every other pitch, including the carrier's own, still
+    sounds at its own value: the overflow that survives fits inside one
+    octave already, so exact pitch is the strongest thing assertable here.
+    Once the overflow no longer fits, the fold trades register for
+    closeness and only pitch class survives -- that is what
     `test_the_arpeggio_stays_inside_one_octave` covers."""
     arrangement = arrange(
         score_of(*[note(p, 0.0, dur=1.0) for p in (72, 69, 67, 64, 62, 60, 48)])
@@ -260,7 +273,9 @@ def test_nothing_is_dropped_when_the_channels_run_out():
         for e in c.events
         for offset in (e.arp or (0,))
     }
-    assert {72, 69, 67, 64, 62, 60, 48} <= heard
+    assert {72, 69, 67, 64, 48} <= heard
+    assert 60 not in heard, "60 doubles a pitch class already sounding (rule 1)"
+    assert 62 not in heard, "62 can't form a cycle and isn't the chord's third (rule 2)"
 
 
 
@@ -283,11 +298,18 @@ def test_a_chord_re_entering_after_a_rest_still_reaches_lead_and_bass():
     assert pitches(arrangement, "bass") == [48, 50]
 
 
-def test_a_short_dense_chord_still_sounds_every_pitch():
-    """A cycle shorter than its pitch set is where voices quietly went missing:
-    seven notes lasting 32ms each left room for two arpeggio steps.
+def test_drop_decisions_dont_depend_on_note_duration():
+    """Same seven-note overflow as
+    `test_a_doubled_pitch_class_and_an_unrescuable_pair_are_dropped`, at 32ms
+    a note instead of a full second. `decide()` never looks at duration, only
+    pitch class, so the same two notes (60, 62) are dropped and the same five
+    survive, regardless of how long any of them last.
 
-    Same overflow as above, so the fold is a no-op and exact pitch holds."""
+    This scenario used to guard the span floor
+    (`max(span, len(pitches) * rate_sec)`) that keeps a short dense cycle from
+    skipping members -- that guard is still asserted live, on a chord that
+    actually cycles, by `test_a_short_dense_chord_still_sounds_every_member`
+    (roster_of(3))."""
     arrangement = arrange(
         score_of(*[note(p, 0.0, dur=0.032) for p in (72, 69, 67, 64, 62, 60, 48)])
     )
@@ -297,7 +319,9 @@ def test_a_short_dense_chord_still_sounds_every_pitch():
         for e in c.events
         for offset in (e.arp or (0,))
     }
-    assert {72, 69, 67, 64, 62, 60, 48} <= heard
+    assert {72, 69, 67, 64, 48} <= heard
+    assert 60 not in heard
+    assert 62 not in heard
 
 
 def test_sparse_writing_produces_no_arpeggio():
@@ -526,13 +550,26 @@ def test_the_notes_a_dropped_voice_would_have_taken_reach_the_arpeggio():
     assert {event.pitch + offset for offset in event.arp} == {69, 67, 64}
 
 
-def test_four_voices_drop_only_inner_b_and_carry_on_inner_a():
+def test_four_voices_drop_a_third_when_the_carriers_own_note_isnt_a_doubling():
+    """64 is the chord's only third above the bass (48) -- the usual case for
+    rule 3 to displace a doubling with it. But inner_a's own note (67) is not
+    a doubling of anything else sounding (lead 72 and counter 69 are neither
+    of them a 67), so replacing it would trade a real note for another real
+    note rather than for a redundant one. Rule 3 declines, and 64 is
+    genuinely dropped rather than displacing 67."""
     arrangement = arrange(
         score_of(note(72, 0.0), note(69, 0.0), note(67, 0.0), note(64, 0.0), note(48, 0.0)),
         roster_of(4),
     )
     assert set(channels(arrangement)) == {"lead", "counter", "inner_a", "bass"}
-    assert 64 in pitches(arrangement, "inner_a")
+    assert pitches(arrangement, "inner_a") == [67], "67 must survive untouched"
+    heard = {
+        e.pitch + offset
+        for c in arrangement.channels
+        for e in c.events
+        for offset in (e.arp or (0,))
+    }
+    assert 64 not in heard, "the third is dropped, not displacing a non-doubling"
 
 
 def test_the_echo_follows_the_lead_at_every_count():
@@ -545,22 +582,32 @@ def test_the_echo_follows_the_lead_at_every_count():
 def test_the_arpeggio_stays_inside_one_octave():
     """The test that excludes taking overflow pitches as they lie.
 
-    Ragtime's widest overflow alternated F3 with A-flat4 — an octave and a
-    fourth, cycling nine times inside one 0.3 s event. Nothing about that
-    reads as a chord; it reads as a siren. A chip arpeggio names a chord by
-    cycling its members close together, so every member folds into the
-    octave above the lowest. Pitch class is what survives, register is not.
+    With a three-voice roster, the counter is both the carrier and the
+    dumping ground for overflow. Its own note (79) sits nearly two octaves
+    above the lowest overflow member (57) -- taken as written, cycling
+    between them would be a siren, not a chord. Nothing about that reads as
+    a chord; it reads as a siren. A chip arpeggio names a chord by cycling
+    its members close together, so every member folds into the octave above
+    the lowest: 79 becomes 67, a fourth above 66 and inside the same octave
+    as the other two members. Pitch class is what survives, register is not.
     """
     arrangement = arrange(
         score_of(
-            note(53, 0.0, dur=0.3), note(68, 0.0, dur=0.3), note(72, 0.0, dur=0.3),
-            note(69, 0.0, dur=0.3), note(67, 0.0, dur=0.3), note(48, 0.0, dur=0.3),
-        )
+            note(82, 0.0, dur=0.3),  # lead
+            note(79, 0.0, dur=0.3),  # counter's own note, before overflow
+            note(66, 0.0, dur=0.3),
+            note(57, 0.0, dur=0.3),
+            note(40, 0.0, dur=0.3),  # bass
+        ),
+        roster_of(3),
     )
     arped = [e for c in arrangement.channels for e in c.events if e.arp]
-    assert arped, "a six-note chord must overflow"
+    assert arped, "this overflow must still form a real cycle"
     for event in arped:
         assert max(event.arp) < 12, f"{event.arp} leaps out of the octave"
+        members = {event.pitch + offset for offset in event.arp}
+        assert 67 in members, "79 folds down into this octave as 67"
+        assert 79 not in members, "the raw, unfolded pitch must not survive"
 
 
 def test_the_default_arpeggio_is_slower_than_the_ear_fuses():

@@ -91,6 +91,17 @@ Rule 3 exists because rules 1 and 2 choose what to keep by pitch height —
 alto over tenor — and never by harmonic function, so the third is lost
 whenever the tenor happens to hold it.
 
+**Note (post-implementation):** rule 3's "counting arpeggio members" above
+is aspirational, not what ships. `sounding` and `others` are computed once
+per onset from the texture `_assign` left behind, before the policy runs on
+any overflow group; a `Displace` or `Cycle` decided at an earlier onset is
+never folded back in when a later onset is judged. This is deliberate —
+`_arpeggiate`'s docstring in `arrange.py` says so — because it keeps every
+onset's verdict independent of the order overflow onsets happen to be
+processed in. The cost is that a third rescued by rule 3 at one onset does
+not count as "already sounding" for a rule 1 or rule 3 decision at the next
+onset, even though by then it audibly is.
+
 ## Measured outcome
 
 Prototyped end to end before this spec was written, not projected:
@@ -121,6 +132,7 @@ chorale       3    0 / 34      9 / 34     7 / 34       2
 minuet        3    0 / 15      3 / 15     0 / 15       3
 ragtime       3    0 / 20      7 / 20     4 / 20       3
 ragtime       4    0 / 16     14 / 16     5 / 16       9
+ragtime       5     0 / 7       7 / 7      0 / 7       7
 ```
 
 Rule 3 costs **nothing** in arp share — the figures above are unchanged by
@@ -193,3 +205,48 @@ fraction of the carrier channel's sounding duration. Phase 7's re-audition
 quoted 30.5% for ragtime at `count = 4` where this spec measures 41.5%; the
 two are not the same measure. The metric added in this phase is the
 definition that should be quoted from here on.
+
+## Outcome (2026-08-23)
+
+The policy is implemented and `tests/test_quality.py` enforces the numbers
+below as ceilings on every fixture and count. This is a measurement record,
+not an audition — nothing in this section has been listened to.
+
+Arp share, the unconditional-overflow behaviour this phase replaces against
+the three-rule policy:
+
+| fixture | count | before | after |
+|---|---|---|---|
+| chorale | 3 | 92.2% | 0.0% |
+| minuet | 3 | 66.7% | 0.0% |
+| ragtime | 3 | 59.8% | 26.1% |
+| ragtime | 4 | 41.5% | 2.1% |
+| ragtime | 5 | 15.6% | 2.1% |
+
+Hollow chords — chords that had a third and end up without one, a cost the
+previous implementation never paid, because it dropped nothing:
+
+| fixture | count | hollow |
+|---|---|---|
+| chorale | 3 | 7 |
+| minuet | 3 | 0 |
+| ragtime | 3 | 4 |
+| ragtime | 4 | 5 |
+| ragtime | 5 | 0 |
+
+**The audition is outstanding.** Two renders Phase 7 already auditioned and
+accepted now sound different, and a table of ceilings is not permission to
+assume the change is an improvement:
+
+- `nes-tight` (`count = 4`) on ragtime, arpeggio 41.5% to 2.1%.
+- `DEFAULTS` (`count = 5`) on ragtime, arpeggio 15.6% to 2.1%.
+
+Both need to be rendered as WAV and listened to — `aplay` renders Ogg as
+static — because the sound Phase 7 signed off on is not the sound this
+phase ships. Separately, `count = 3` on the chorale and the minuet, the
+arrangement Phase 6 rejected and Phase 7's re-audition called "better,
+still not musical," now arpeggiates not at all on both. Whether a
+three-voice chorale and minuet with no arpeggio sound reduced or sound thin
+is a question the share numbers cannot answer. `nes-tight` stays at
+`count = 4` until an audition says otherwise; this record is measurement,
+not that audition.
