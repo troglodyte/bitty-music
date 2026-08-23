@@ -17,6 +17,7 @@ from bitty.model import Note
 
 OCTAVE = 12
 MIN_MEMBERS = 3  # two pitches alternating is a trill; naming a chord takes three
+THIRDS = (3, 4)  # minor and major; a tenth is a third folded into the octave
 
 
 @dataclass(frozen=True)
@@ -65,8 +66,29 @@ def decide(
         return Drop()
     pitches = _fold({n.pitch for n in keep} | set(carrier))
     if len(pitches) < MIN_MEMBERS:
+        rescued = _only_third(keep, others, bass)
+        if rescued is not None and carrier and all(
+            pitch % OCTAVE in others for pitch in carrier
+        ):
+            return Displace(pitch=rescued)
         return Drop()
     return Cycle(pitches=pitches, keep=keep)
+
+
+def _only_third(keep: tuple[Note, ...], others: frozenset[int], bass: int | None) -> int | None:
+    """The pitch of a surviving note that is the chord's sole third.
+
+    The third is what tells a major chord from a minor one; the fifth above a
+    sounding root is the tone a three-voice reduction is supposed to spend.
+    Losing the third to keep a doubling gets that backwards.
+    """
+    if bass is None:
+        return None
+    if any((pitch - bass) % OCTAVE in THIRDS for pitch in others):
+        return None
+    return next(
+        (n.pitch for n in keep if (n.pitch - bass) % OCTAVE in THIRDS), None
+    )
 
 
 def _fold(members: set[int]) -> tuple[int, ...]:

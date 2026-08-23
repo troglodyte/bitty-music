@@ -90,3 +90,55 @@ def test_three_pitches_still_survive():
     )
     assert isinstance(result, Cycle)
     assert len(result.pitches) == 3
+
+
+def test_the_only_third_displaces_a_redundant_doubling():
+    """Rules 1 and 2 choose by pitch height and never by harmonic function, so
+    the third is lost whenever the inner part below happens to hold it."""
+    # Bass C3 (48). Carrier holds G4 (67) — a fifth, already doubled in
+    # `others`. E4 (64) overflows and is the chord's only third.
+    result = decide(
+        notes=(note(64),),
+        carrier=(67,),
+        sounding=frozenset({0, 7}),
+        others=frozenset({0, 7}),
+        bass=48,
+    )
+    assert result == Displace(pitch=64)
+
+
+def test_no_rescue_when_a_third_already_sounds():
+    """Nothing is at risk, so nothing is worth disturbing the line for."""
+    result = decide(
+        notes=(note(64),),
+        carrier=(67,),
+        sounding=frozenset({0, 7}),
+        others=frozenset({0, 4, 7}),  # E already present elsewhere
+        bass=48,
+    )
+    assert result == Drop()
+
+
+def test_no_rescue_when_the_carrier_note_is_not_redundant():
+    """Swapping would trade one loss for another, so the line wins."""
+    # Carrier holds A4 (69), pitch class 9, which nothing else is playing.
+    result = decide(
+        notes=(note(64),),
+        carrier=(69,),
+        sounding=frozenset({0, 7, 9}),
+        others=frozenset({0, 7}),
+        bass=48,
+    )
+    assert result == Drop()
+
+
+def test_a_tenth_counts_as_a_third():
+    """A third an octave up is the same harmonic fact."""
+    result = decide(
+        notes=(note(76),),  # E5, a tenth above C3
+        carrier=(67,),
+        sounding=frozenset({0, 7}),
+        others=frozenset({0, 7}),
+        bass=48,
+    )
+    assert result == Displace(pitch=76)
