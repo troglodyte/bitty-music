@@ -26,8 +26,9 @@ from bitty.model import Score
 # reaches, and PolyBLEP bandlimits the harmonics above it anyway. C1 is where
 # the quantized triangle bass stops reading as pitch on a small speaker; C8 is
 # where the top stops being a note and starts being a whistle. Both are
-# calibration set by audition, which is why they live here rather than in the
-# TOML — the same rule that keeps `ARP_RATE_SEC` out of config.
+# calibration set by audition, and Phase 5b settled that calibration stays
+# out of the TOML: the band is a property of the synth and the speaker, not
+# of any one piece, so it is not a per-score taste the way a transpose is.
 MIN_PITCH = 24  # C1, 32.7 Hz
 MAX_PITCH = 108  # C8, 4186 Hz
 

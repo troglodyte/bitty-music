@@ -561,8 +561,8 @@ a project, so its natural home is a `<stem>.bitty.toml` sitting next to the
 score, where it stays attached to the score it describes.
 
 **`tempo_scale` is an arranger input, not a playback speed.** It scales `bpm`
-up and every note and bar time down together, so what comes out is the same
-music re-derived at the new tempo, not the old arrangement replayed faster.
+and every note and bar time inversely, so what comes out is the same music
+re-derived at the new tempo, not the old arrangement replayed faster.
 Everything downstream that is measured in beats moves with it; everything
 measured in seconds does not:
 
@@ -611,6 +611,14 @@ step into a seventh in the other direction. The whole promise of a uniform
 transpose is that the intervals survive it, so a transpose that cannot keep
 that promise should say so rather than half-keep it. Naming the largest shift
 that does fit turns the error into the answer: `+20` here, so try that.
+
+The refusal is judged against the whole score, before `--bars` trims
+anything, because `transform.apply` runs immediately after `ingest` and
+validation belongs with the transform rather than with whichever excerpt a
+later flag happens to keep. `bitty convert ragtime.mxl --bars 1-2` at
+`transpose = 20` is refused naming `G#6 (MIDI 92)` and "this score allows at
+most +16", even though bars 1-2 top out at MIDI 75 and would fit the shift
+comfortably — the note that decides it lives in a bar the excerpt never sees.
 
 The band is MIDI 24 (C1, 32.7 Hz) to MIDI 108 (C8, 4186 Hz), and it lives as
 module constants in `transform.py` rather than as config keys. It is
@@ -752,9 +760,6 @@ either. The chorale's last lead F#4 is already in its opening chord and
 ragtime's G#4 is an octave over its opening lead, which is what a loop that
 comes around tends to do. So the null result is about audibility, not about
 having dodged a harmonic problem.
-
-Deliberately still ahead: `[transform]` (`transpose`, `tempo_scale`) as its
-own phase with its own auditions.
 
 Design documents and per-phase implementation plans live in
 `docs/superpowers/`.

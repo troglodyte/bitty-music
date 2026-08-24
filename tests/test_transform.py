@@ -163,6 +163,21 @@ def test_the_echo_follows_the_tempo_but_the_ear_s_own_constants_do_not():
     right column is seconds in config, derived from nothing, and must not.
     Scaling `arp_rate_sec` with tempo would undo Phase 7's finding that 48 ms
     is a property of the ear rather than of the music.
+
+    The left-hand assertion is not, by itself, a guard against this phase's
+    central decision — that `tempo_scale` re-derives the arrangement rather
+    than replaying it faster. `_echo` derives `delay_sec` from `bpm` alone,
+    so the bpm-only implementation — the wrong one this phase exists to rule
+    out, which halves `bpm` without moving a single note — satisfies
+    `now_echo.delay_sec == was_echo.delay_sec / 2.0` unchanged. This test's
+    real job is the right-hand column: guarding that `arp_rate_sec`,
+    `vibrato_rate_hz`, and `vibrato_delay` stay absolute rather than being
+    scaled along with the tempo, a distinct bug none of the other
+    `tempo_scale` tests check for. The bpm-only implementation itself is
+    caught four times over regardless — by the two vibrato tests, by
+    `test_tempo_scale_moves_the_tempo_and_the_notes_together`, and by
+    `test_convert_obeys_the_tempo_scale` in `test_cli.py` — so do not mistake
+    this test for that guard and conclude the vibrato pair is redundant.
     """
     score = ingest(FIXTURES / "ragtime.mxl")
     plain = arrange(score)
