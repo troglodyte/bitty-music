@@ -28,7 +28,23 @@ def apply(score: Score, settings: Transform) -> Score:
         return score
 
     shift = settings.transpose
+    scale = settings.tempo_scale
     return replace(
         score,
-        notes=tuple(replace(note, pitch=note.pitch + shift) for note in score.notes),
+        bpm=score.bpm * scale,
+        notes=tuple(
+            replace(
+                note,
+                pitch=note.pitch + shift,
+                start=note.start / scale,
+                dur=note.dur / scale,
+            )
+            for note in score.notes
+        ),
+        # Bars carry times too, and `analyze` reads them against the notes.
+        # Scaling one and not the other is a score whose barlines have slid.
+        bars=tuple(
+            replace(bar, start=bar.start / scale, dur=bar.dur / scale)
+            for bar in score.bars
+        ),
     )
