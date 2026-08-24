@@ -7,7 +7,7 @@ from bitty.arrange import arrange
 from bitty.config import Transform
 from bitty.ingest import ingest
 from bitty.model import Bar, Note, Score
-from bitty.transform import apply
+from bitty.transform import MAX_PITCH, apply
 
 FIXTURES = Path(__file__).parent / "fixtures"
 NAMES = ["chorale", "minuet", "ragtime"]
@@ -177,3 +177,48 @@ def test_the_echo_follows_the_tempo_but_the_ear_s_own_constants_do_not():
         assert now.instrument.arp_rate_sec == was.instrument.arp_rate_sec
         assert now.instrument.vibrato_rate_hz == was.instrument.vibrato_rate_hz
         assert now.instrument.vibrato_delay == was.instrument.vibrato_delay
+
+
+def test_a_transpose_past_the_ceiling_names_the_arithmetic():
+    """A refusal that says which note, where it lands, and what would fit.
+
+    'out of range' would leave the reader to find the offending note and do
+    the subtraction themselves, on a knob whose whole purpose is being swept.
+    """
+    score = a_score(a_note(pitch=60), a_note(pitch=108, start=1.0))
+    with pytest.raises(ValueError) as error:
+        apply(score, Transform(transpose=7))
+    message = str(error.value)
+    assert "transform.transpose = +7" in message
+    assert "C8 (MIDI 108)" in message
+    assert "MIDI 115" in message
+    assert "ceiling of 108" in message
+    assert "at most +0" in message
+
+
+def test_a_transpose_under_the_floor_names_the_arithmetic():
+    score = a_score(a_note(pitch=36), a_note(pitch=30, start=1.0))
+    with pytest.raises(ValueError) as error:
+        apply(score, Transform(transpose=-12))
+    message = str(error.value)
+    assert "transform.transpose = -12" in message
+    assert "F#1 (MIDI 30)" in message
+    assert "MIDI 18" in message
+    assert "floor of 24" in message
+    assert "at least -6" in message
+
+
+def test_the_largest_transpose_that_fits_is_accepted():
+    """The bound is the edge of the band, not one short of it."""
+    score = a_score(a_note(pitch=101))
+    assert apply(score, Transform(transpose=7)).notes[0].pitch == MAX_PITCH
+
+
+def test_the_range_is_judged_after_the_shift_not_before():
+    """A score already sitting on the ceiling may still be transposed down."""
+    score = a_score(a_note(pitch=108))
+    assert apply(score, Transform(transpose=-12)).notes[0].pitch == 96
+
+
+def test_a_score_with_no_notes_refuses_nothing():
+    assert apply(a_score(), Transform(transpose=48)).notes == ()

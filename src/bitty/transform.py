@@ -21,6 +21,18 @@ from dataclasses import replace
 from bitty.config import Transform
 from bitty.model import Score
 
+# The playable band, and the binding limit is audibility rather than Nyquist:
+# a fundamental past 0.45 * 44100 is around MIDI 135, which no real score
+# reaches, and PolyBLEP bandlimits the harmonics above it anyway. C1 is where
+# the quantized triangle bass stops reading as pitch on a small speaker; C8 is
+# where the top stops being a note and starts being a whistle. Both are
+# calibration set by audition, which is why they live here rather than in the
+# TOML — the same rule that keeps `ARP_RATE_SEC` out of config.
+MIN_PITCH = 24  # C1, 32.7 Hz
+MAX_PITCH = 108  # C8, 4186 Hz
+
+_NAMES = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
+
 
 def apply(score: Score, settings: Transform) -> Score:
     """A transposed, re-tempo'd score. Under the defaults, the same object."""
@@ -28,6 +40,7 @@ def apply(score: Score, settings: Transform) -> Score:
         return score
 
     shift = settings.transpose
+    _check_fits(score, shift)
     scale = settings.tempo_scale
     return replace(
         score,
@@ -48,3 +61,40 @@ def apply(score: Score, settings: Transform) -> Score:
             for bar in score.bars
         ),
     )
+
+
+def _check_fits(score: Score, shift: int) -> None:
+    """Refuse a shift this score cannot take, naming the note that decides it.
+
+    Refusing rather than folding the offender back into the band: an octave
+    leap dropped into the middle of a phrase is exactly the note soup that
+    voice-leading assignment exists to prevent. A transpose that does not fit
+    is a config error, not something to quietly repair.
+
+    `ValueError` rather than a CLI error because this module has never heard
+    of a flag or a file — `loop.trim` and `loop.candidates` raise the same way,
+    and the CLI adds the provenance it alone knows.
+    """
+    if not score.notes or shift == 0:
+        return
+
+    top = max(note.pitch for note in score.notes)
+    if top + shift > MAX_PITCH:
+        raise ValueError(
+            f"transform.transpose = {shift:+d}: {_name(top)} (MIDI {top}) becomes "
+            f"MIDI {top + shift}, past the playable ceiling of {MAX_PITCH}. "
+            f"This score allows at most {MAX_PITCH - top:+d}."
+        )
+
+    bottom = min(note.pitch for note in score.notes)
+    if bottom + shift < MIN_PITCH:
+        raise ValueError(
+            f"transform.transpose = {shift:+d}: {_name(bottom)} (MIDI {bottom}) becomes "
+            f"MIDI {bottom + shift}, under the playable floor of {MIN_PITCH}. "
+            f"This score allows at least {MIN_PITCH - bottom:+d}."
+        )
+
+
+def _name(pitch: int) -> str:
+    """MIDI number to the name a person would say, e.g. 108 -> C8."""
+    return f"{_NAMES[pitch % 12]}{pitch // 12 - 1}"
