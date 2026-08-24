@@ -75,12 +75,27 @@ class LoopSettings:
 
 
 @dataclass(frozen=True)
+class Transform:
+    """What the music *is*, changed before any chiptune decision is made.
+
+    `tempo_scale` is an arranger input rather than a playback speed: it is
+    applied to the score, so every duration-sensitive decision downstream —
+    which notes are long enough to waver, where the bars fall, how long the
+    echo's beat is — re-derives at the new tempo. See `transform.py`.
+    """
+
+    transpose: int = 0  # semitones
+    tempo_scale: float = 1.0
+
+
+@dataclass(frozen=True)
 class Config:
     output: Output = Output()
     echo: EchoSettings = EchoSettings()
     arp: Arp = Arp()
     vibrato: Vibrato = Vibrato()
     loop: LoopSettings = LoopSettings()
+    transform: Transform = Transform()
     voices: Roster = ROSTER
 
 
@@ -244,6 +259,10 @@ _TABLES = {
     "loop": {
         "min_bars": ("min_bars", _whole(low=1)),
         "seam_ratio": ("seam_ratio", _ranged(low=0.0)),
+    },
+    "transform": {
+        "transpose": ("transpose", _whole(low=-48, high=48)),
+        "tempo_scale": ("tempo_scale", _ranged(low=0.25, high=4.0)),
     },
 }
 
