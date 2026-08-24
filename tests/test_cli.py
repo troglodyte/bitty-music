@@ -409,3 +409,116 @@ def test_a_configured_sample_rate_reaches_the_written_file(tmp_path):
     runner.invoke(app, ["convert", str(score), "-o", str(tmp_path / "out")])
     _, rate = sf.read(tmp_path / "out" / "two_part.wav")
     assert rate == 22050
+
+
+def a_config(tmp_path, body):
+    path = tmp_path / "sweep.toml"
+    path.write_text(body)
+    return str(path)
+
+
+def test_convert_obeys_the_transform_table(tmp_path):
+    runner.invoke(app, ["convert", str(MINUET), "-o", str(tmp_path)])
+    plain = Arrangement.from_json((tmp_path / "minuet.arrangement.json").read_text())
+
+    shifted_dir = tmp_path / "up"
+    result = runner.invoke(
+        app,
+        [
+            "convert", str(MINUET), "-o", str(shifted_dir),
+            "--config", a_config(tmp_path, "[transform]\ntranspose = 3\n"),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    shifted = Arrangement.from_json((shifted_dir / "minuet.arrangement.json").read_text())
+
+    def pitches(arrangement):
+        return [e.pitch for c in arrangement.channels for e in c.events]
+
+    assert pitches(shifted) == [pitch + 3 for pitch in pitches(plain)]
+
+
+def test_convert_obeys_the_tempo_scale(tmp_path):
+    """`--target generic` so the audio lands in one file whatever the loop did.
+
+    The bevy default names its output after the loop it found
+    (`minuet_loop.wav`), and `tempo_scale` is allowed to change which
+    candidate wins — see the loop risk in the design. Asserting on a filename
+    that depends on the thing under test is how a test starts failing for the
+    wrong reason.
+    """
+    result = runner.invoke(
+        app,
+        [
+            "convert", str(MINUET), "-o", str(tmp_path), "--wav", "--target", "generic",
+            "--config", a_config(tmp_path, "[transform]\ntempo_scale = 2.0\n"),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    written = Arrangement.from_json((tmp_path / "minuet.arrangement.json").read_text())
+    assert written.meta["bpm"] == 240.0
+
+    audio, sample_rate = sf.read(tmp_path / "minuet.wav")
+    # The untransformed generic render is 24.4s; halving the tempo halves the
+    # music and the echo with it, so anything near 24s means bpm moved alone.
+    assert 10.0 < len(audio) / sample_rate < 15.0
+
+
+def test_sections_reports_the_key_it_was_transposed_into(tmp_path):
+    """Key detection needs no special-casing: `analyze` sees the new pitches."""
+    plain = runner.invoke(app, ["sections", str(MINUET)])
+    assert "G major" in plain.output and "D major" in plain.output
+
+    result = runner.invoke(
+        app,
+        ["sections", str(MINUET), "--config", a_config(tmp_path, "[transform]\ntranspose = 2\n")],
+    )
+    assert result.exit_code == 0, result.output
+    assert "A major" in result.output and "E major" in result.output
+
+
+def test_a_transpose_that_does_not_fit_is_refused_by_name(tmp_path):
+    result = runner.invoke(
+        app,
+        [
+            "convert", str(MINUET), "-o", str(tmp_path),
+            "--config", a_config(tmp_path, "[transform]\ntranspose = 21\n"),
+        ],
+        # Click wraps BadParameter into a rich box at the terminal width, and a
+        # pytest tmp_path is long enough that the config path splits mid-token
+        # at the default 80 columns. A wide terminal keeps it one piece.
+        env={"COLUMNS": "200"},
+    )
+    assert result.exit_code != 0
+    assert "past the playable ceiling" in result.output
+    assert "at most +20" in result.output
+    assert "sweep.toml" in result.output, "the CLI knows the provenance; say it"
+
+
+def test_render_does_not_transform(tmp_path):
+    """The contract that makes one transform site safe.
+
+    Everything musical was decided when the JSON was written. If `render`
+    applied `[transform]` too, this convert-at-+3 would re-render at +6 and the
+    two files would differ.
+    """
+    config = a_config(tmp_path, "[transform]\ntranspose = 3\ntempo_scale = 1.25\n")
+    runner.invoke(
+        app,
+        [
+            "convert", str(MINUET), "-o", str(tmp_path), "--wav",
+            "--target", "generic", "--config", config,
+        ],
+    )
+    before = (tmp_path / "minuet.wav").read_bytes()
+    (tmp_path / "minuet.wav").unlink()
+
+    result = runner.invoke(
+        app,
+        [
+            "render", str(tmp_path / "minuet.arrangement.json"),
+            "-o", str(tmp_path), "--wav", "--target", "generic", "--config", config,
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / "minuet.wav").read_bytes() == before

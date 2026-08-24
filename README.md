@@ -473,6 +473,10 @@ min_note_ms = 500         # >=0.0; a note shorter than this never gets vibrato
 [loop]
 min_bars = 8              # >=1, whole bars
 seam_ratio = 1.0          # >=0.0
+
+[transform]
+transpose = 0             # -48..48 semitones; refuses if the score leaves C1-C8
+tempo_scale = 1.0         # 0.25-4.0; re-arranges at the new tempo
 ```
 
 `[vibrato]`'s first three keys are spread onto every voice's instrument;
@@ -541,6 +545,96 @@ that cannot name a chord, which takes the chorale and the minuet to no
 arpeggio at all and ragtime to 26.1%. The cost is harmonic: a few chords per
 piece lose their third where no doubling was free to displace.
 
+### `[transform]`
+
+Two keys that change the score itself rather than how it is rendered:
+`transpose`, whole semitones from -48 to 48, default 0; and `tempo_scale`,
+0.25 to 4.0, default 1.0. Both are applied by `transform.apply`, which runs
+immediately after `ingest` at exactly two sites — `bitty sections` and
+`bitty convert` — so the score that gets analysed, reduced, looped and
+rendered is already the transformed one, and the sections `bitty sections`
+prints are the sections of the piece you will actually hear.
+
+Neither has a CLI flag, deliberately. A transposition is a property of one
+piece — this song sits too low for a pulse wave — not a taste you hold across
+a project, so its natural home is a `<stem>.bitty.toml` sitting next to the
+score, where it stays attached to the score it describes.
+
+**`tempo_scale` is an arranger input, not a playback speed.** It scales `bpm`
+and every note and bar time inversely, so what comes out is the same music
+re-derived at the new tempo, not the old arrangement replayed faster.
+Everything downstream that is measured in beats moves with it; everything
+measured in seconds does not:
+
+| Follows the tempo | Stays absolute |
+|---|---|
+| The echo's delay — `delay_beats` is beats, and a beat got shorter | `arp.rate_ms` |
+| Bar boundaries, and the sections `bitty sections` prints | `vibrato.rate_hz` |
+| Loop seam positions, and the length of what is written | `vibrato.delay_ms` |
+| Which notes are long enough to waver | `vibrato.min_note_ms` |
+
+That last row is where the difference bites. At `tempo_scale = 1.5`, notes
+that used to clear `vibrato.min_note_ms`'s 500 ms no longer do, and the piece
+loses vibrato it had; slow the same piece down and notes that were previously
+too brief acquire it. A tape-speed control would have carried the vibrato
+along unchanged. This is a re-arrangement — and that is the point: at a new
+tempo, the arranger's judgements about *which* notes are long enough to
+waver deserve to be made again at the tempo you asked for, not inherited from
+the one you didn't.
+
+The right-hand column stays absolute because those values are seconds in the
+file and nothing derives them from `bpm` — and `arp.rate_ms` in particular is
+not a musical duration at all. Phase 7 chose 48 ms by ear, after 16 ms was
+found to fuse into roughness at 31 Hz rather than reading as separate notes.
+That is a fact about hearing, not about the piece, and it does not become
+less true when the music speeds up. Scaling it with the tempo would quietly
+undo the finding at every tempo but 1.0.
+
+**`transpose` refuses rather than folds.** It is uniform whole semitones
+applied to every note, and when one of them would leave the playable band the
+run stops and says which note, by how much, and what would have fit:
+
+```
+$ bitty convert minuet.mxl
+Invalid value for --config: transform.transpose = +21: E6 (MIDI 88) becomes
+MIDI 109, past the playable ceiling of 108. This score allows at most +20.
+Config read from: /home/you/scores/minuet.bitty.toml
+```
+
+A `Config read from:` line follows for every config file the run read, because
+the value that caused this came out of a file and the cascade means the file
+you are looking at may not be the one that set it.
+
+The alternative — folding the offending note back into the octave below —
+would keep the run alive by silently rewriting the melody, turning a scale
+step into a seventh in the other direction. The whole promise of a uniform
+transpose is that the intervals survive it, so a transpose that cannot keep
+that promise should say so rather than half-keep it. Naming the largest shift
+that does fit turns the error into the answer: `+20` here, so try that.
+
+The refusal is judged against the whole score, before `--bars` trims
+anything, because `transform.apply` runs immediately after `ingest` and
+validation belongs with the transform rather than with whichever excerpt a
+later flag happens to keep. `bitty convert ragtime.mxl --bars 1-2` at
+`transpose = 20` is refused naming `G#6 (MIDI 92)` and "this score allows at
+most +16", even though bars 1-2 top out at MIDI 75 and would fit the shift
+comfortably — the note that decides it lives in a bar the excerpt never sees.
+
+The band is MIDI 24 (C1, 32.7 Hz) to MIDI 108 (C8, 4186 Hz), and it lives as
+module constants in `transform.py` rather than as config keys. It is
+calibration, not taste: it describes where this synth's oscillators and the
+ear still agree that a pitch is a pitch, which is not something a piece gets
+an opinion about. The current numbers are provisional — an audition may yet
+find the useful band is narrower than the theoretical one, and moving a
+constant is the cheaper edit.
+
+`bitty render` deliberately does not transform. It takes an arrangement JSON
+that has already been through all of this and turns events into samples;
+everything musical was decided when that JSON was written. If `render`
+applied `[transform]` too, a `convert` at `+3` re-rendered under the same
+config would land at `+6` — the same file transposed twice by the same
+config, which is exactly the surprise a rendering step must not hold.
+
 ### Milliseconds in the file, seconds in the code
 
 Every key ending in `_ms` — `arp.rate_ms`, `vibrato.delay_ms`,
@@ -579,7 +673,7 @@ accepts delay_beats, level, on
 ```
 
 The same happens for an unknown table (`unknown table; bitty config accepts
-arp, echo, loop, output, vibrato, voices`) and an unknown `[voices.<role>]`
+arp, echo, loop, output, transform, vibrato, voices`) and an unknown `[voices.<role>]`
 role (`unknown voice; the roster is lead, counter, inner_a, inner_b, bass`)
 or key.
 
@@ -667,8 +761,44 @@ ragtime's G#4 is an octave over its opening lead, which is what a loop that
 comes around tends to do. So the null result is about audibility, not about
 having dodged a harmonic problem.
 
-Deliberately still ahead: `[transform]` (`transpose`, `tempo_scale`) as its
-own phase with its own auditions.
+Phase 9 is implemented: `[transform]`, with `transpose` and `tempo_scale`.
+The decision that shapes the rest of it is that `tempo_scale` re-derives the
+arrangement rather than replaying it faster. It scales `bpm` and every note
+and bar time inversely, before the arranger sees the score, so the
+duration-sensitive decisions move with it — the echo's beat, where the bars
+fall, and which notes are long enough to waver. That last one is the visible
+cost and it is deliberate: at `1.5` a note that used to clear the 500 ms
+vibrato threshold no longer does, so the piece loses vibrato, and a slowed
+piece gains it. What does not move is what was never derived from the tempo:
+`arp.rate_ms`, `vibrato.rate_hz`, `vibrato.delay_ms`, and the threshold
+itself are seconds in the file, and 48 ms in particular is a fact about the
+ear that Phase 7 measured rather than a fact about the music.
+
+`transpose` costs almost nothing by comparison, because the arranger has no
+absolute pitch logic anywhere: top and bottom pinning, nearest-last-pitch
+assignment, the reduction's pitch-class comparison, and the arpeggio's
+octave folding are all relative or uniformly shifted. So arranging a
+transposed score gives back the untransposed arrangement with every pitch
+moved, and that invariant — asserted over whole events, not a pitch list —
+is the load-bearing test. It also means the goldens never moved. A shift
+that would push a note outside the playable band is refused rather than
+folded back into it, naming the note, where it lands, and the largest shift
+that would fit; folding would let a melody leap an octave mid-phrase, which
+is the note soup voice-leading assignment exists to prevent. `render`
+deliberately does not transform, so a convert at `+3` re-rendered under the
+same config cannot land at `+6`.
+
+**The audition is still owed, and it is what sets the two bounds.** C1 and
+C8 are provisional taste rather than measurement — the same way Phase 7's
+48 ms was set by ear — so the clips exist and the numbers are recorded in
+`audition/transform/NOTES.md` but nothing has been listened to. What the
+measurements do say: the control is byte-identical to a plain convert, no
+clip contains a quiet window, the loop picked bars 1-8 in every variant
+including all three tempo scales, and the envelope-frame risk is real but
+narrow — at `tempo_scale = 4.0` two of the minuet's 156 events fall under
+one 16.7 ms envelope frame, while at `1.5` none do. If the audition
+disagrees with C1 or C8, the constants move and this paragraph's numbers
+are wrong rather than its design.
 
 Design documents and per-phase implementation plans live in
 `docs/superpowers/`.

@@ -195,6 +195,53 @@ def test_a_whole_number_field_refuses_a_fraction():
     assert "whole number" in str(caught.value)
 
 
+def test_the_transform_table_reaches_the_config():
+    result = merge(DEFAULTS, "[transform]\ntranspose = -12\ntempo_scale = 0.75\n", "test")
+    assert result.transform.transpose == -12
+    assert result.transform.tempo_scale == 0.75
+
+
+def test_the_transform_defaults_are_the_identity():
+    """Everything downstream assumes an untouched score unless a file says otherwise."""
+    assert DEFAULTS.transform.transpose == 0
+    assert DEFAULTS.transform.tempo_scale == 1.0
+
+
+def test_a_transpose_past_four_octaves_is_refused():
+    with pytest.raises(ConfigError) as error:
+        merge(DEFAULTS, "[transform]\ntranspose = 49\n", "test")
+    assert "transform.transpose" in str(error.value)
+    assert "at most 48" in str(error.value)
+
+
+def test_a_fractional_transpose_is_refused():
+    """Semitones only: the pitch pipeline is integer MIDI throughout."""
+    with pytest.raises(ConfigError) as error:
+        merge(DEFAULTS, "[transform]\ntranspose = 1.5\n", "test")
+    assert "whole number" in str(error.value)
+
+
+def test_a_tempo_scale_of_zero_is_refused():
+    """Zero is not a slow tempo; it is a division by zero two stages later."""
+    with pytest.raises(ConfigError) as error:
+        merge(DEFAULTS, "[transform]\ntempo_scale = 0.0\n", "test")
+    assert "transform.tempo_scale" in str(error.value)
+    assert "at least 0.25" in str(error.value)
+
+
+def test_a_tempo_scale_past_quadruple_is_refused():
+    with pytest.raises(ConfigError) as error:
+        merge(DEFAULTS, "[transform]\ntempo_scale = 4.5\n", "test")
+    assert "at most 4.0" in str(error.value)
+
+
+def test_an_unknown_transform_key_lists_the_two_that_exist():
+    with pytest.raises(ConfigError) as error:
+        merge(DEFAULTS, "[transform]\ntranspose_cents = 50\n", "test")
+    assert "transform.transpose_cents" in str(error.value)
+    assert "tempo_scale" in str(error.value) and "transpose" in str(error.value)
+
+
 def test_broken_toml_names_the_file():
     with pytest.raises(ConfigError) as caught:
         merge(DEFAULTS, "[echo\nlevel = 0.5\n", "bitty.toml")

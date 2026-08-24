@@ -9,6 +9,7 @@ import typer
 from bitty import config as config_module
 from bitty import loop as loop_stage
 from bitty import targets
+from bitty import transform as transform_stage
 from bitty.analyze import analyze
 from bitty.arrange import arrange
 from bitty.arrangement import Arrangement
@@ -57,6 +58,26 @@ def _settings(
     return replace(resolved, output=output)
 
 
+def _transform(
+    parsed, settings: Config, directory: Path, stem: str, explicit: Path | None
+):
+    """The score's own validation, wrapped with the provenance only the CLI has.
+
+    `transform.apply` has the notes but has never seen a file; `load` folds
+    every layer into a plain `Config` and keeps no source. Neither can write
+    the whole message, so the CLI composes it — the same division `loop.trim`
+    and `--bars` already keep.
+    """
+    try:
+        return transform_stage.apply(parsed, settings.transform)
+    except ValueError as error:
+        sources = config_module.discover(directory, stem)
+        if explicit is not None:
+            sources.append(explicit)
+        where = "".join(f"\nConfig read from: {path}" for path in sources)
+        raise typer.BadParameter(f"{error}{where}", param_hint="--config") from error
+
+
 def _check_preset(name: str | None) -> None:
     if name is not None and name not in config_module.preset_names():
         raise typer.BadParameter(
@@ -100,6 +121,7 @@ def sections(
     settings = _settings(score.parent, score.stem, preset, config_path, None, None, None)
 
     parsed = ingest(score)
+    parsed = _transform(parsed, settings, score.parent, score.stem, config_path)
     found = analyze(parsed)
     total = found[-1].end if found else 0.0
 
@@ -162,6 +184,7 @@ def convert(
     )
 
     parsed = ingest(score)
+    parsed = _transform(parsed, settings, score.parent, score.stem, config_path)
     if bars:
         first, last = _bar_range(bars)
         try:
