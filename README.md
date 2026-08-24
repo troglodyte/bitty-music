@@ -761,5 +761,44 @@ ragtime's G#4 is an octave over its opening lead, which is what a loop that
 comes around tends to do. So the null result is about audibility, not about
 having dodged a harmonic problem.
 
+Phase 9 is implemented: `[transform]`, with `transpose` and `tempo_scale`.
+The decision that shapes the rest of it is that `tempo_scale` re-derives the
+arrangement rather than replaying it faster. It scales `bpm` and every note
+and bar time inversely, before the arranger sees the score, so the
+duration-sensitive decisions move with it — the echo's beat, where the bars
+fall, and which notes are long enough to waver. That last one is the visible
+cost and it is deliberate: at `1.5` a note that used to clear the 500 ms
+vibrato threshold no longer does, so the piece loses vibrato, and a slowed
+piece gains it. What does not move is what was never derived from the tempo:
+`arp.rate_ms`, `vibrato.rate_hz`, `vibrato.delay_ms`, and the threshold
+itself are seconds in the file, and 48 ms in particular is a fact about the
+ear that Phase 7 measured rather than a fact about the music.
+
+`transpose` costs almost nothing by comparison, because the arranger has no
+absolute pitch logic anywhere: top and bottom pinning, nearest-last-pitch
+assignment, the reduction's pitch-class comparison, and the arpeggio's
+octave folding are all relative or uniformly shifted. So arranging a
+transposed score gives back the untransposed arrangement with every pitch
+moved, and that invariant — asserted over whole events, not a pitch list —
+is the load-bearing test. It also means the goldens never moved. A shift
+that would push a note outside the playable band is refused rather than
+folded back into it, naming the note, where it lands, and the largest shift
+that would fit; folding would let a melody leap an octave mid-phrase, which
+is the note soup voice-leading assignment exists to prevent. `render`
+deliberately does not transform, so a convert at `+3` re-rendered under the
+same config cannot land at `+6`.
+
+**The audition is still owed, and it is what sets the two bounds.** C1 and
+C8 are provisional taste rather than measurement — the same way Phase 7's
+48 ms was set by ear — so the clips exist and the numbers are recorded in
+`audition/transform/NOTES.md` but nothing has been listened to. What the
+measurements do say: the control is byte-identical to a plain convert, no
+clip contains a quiet window, the loop picked bars 1-8 in every variant
+including all three tempo scales, and the envelope-frame risk is real but
+narrow — at `tempo_scale = 4.0` two of the minuet's 156 events fall under
+one 16.7 ms envelope frame, while at `1.5` none do. If the audition
+disagrees with C1 or C8, the constants move and this paragraph's numbers
+are wrong rather than its design.
+
 Design documents and per-phase implementation plans live in
 `docs/superpowers/`.
