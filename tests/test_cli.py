@@ -7,6 +7,7 @@ import numpy as np
 import soundfile as sf
 from typer.testing import CliRunner
 
+from bitty import config as config_module
 from bitty.arrangement import Arrangement
 from bitty.cli import app
 
@@ -522,3 +523,73 @@ def test_render_does_not_transform(tmp_path):
     )
     assert result.exit_code == 0, result.output
     assert (tmp_path / "minuet.wav").read_bytes() == before
+
+
+def test_the_refusal_names_a_preset_layer_too(tmp_path):
+    """A preset is a config layer, so a refusal has to admit it was read.
+
+    `load` folds the preset in before any file, and it is the one layer with no
+    path — which is exactly why it was the layer the first version forgot.
+    """
+    shutil.copy(MINUET, tmp_path / "minuet.mxl")
+    result = runner.invoke(
+        app,
+        [
+            "convert", str(tmp_path / "minuet.mxl"), "-o", str(tmp_path),
+            "--preset", "lush",
+            "--config", a_config(tmp_path, "[transform]\ntranspose = 21\n"),
+        ],
+        env={"COLUMNS": "200"},
+    )
+    assert result.exit_code != 0
+    assert "preset lush" in result.output
+
+
+def test_the_refusal_names_every_layer_that_was_actually_read(tmp_path, monkeypatch):
+    """The guard against the CLI's list drifting away from the real cascade.
+
+    `cli._transform` restates the order `config.resolve` applies, because
+    `resolve` returns a `Config` that has kept no record of where anything came
+    from. Restating it means a seventh layer could be added to `resolve` and the
+    refusal would quietly stop naming it, while the config itself resolved
+    correctly — the message would be wrong in the one place a person debugs from.
+
+    So this does not restate the order a third time. It watches `merge`, which
+    every layer passes through, and asserts the refusal names everything the
+    spy saw.
+    """
+    shutil.copy(MINUET, tmp_path / "minuet.mxl")
+    (tmp_path / "bitty.toml").write_text("[echo]\nlevel = 0.3\n")
+    (tmp_path / "minuet.bitty.toml").write_text("[echo]\nlevel = 0.4\n")
+    explicit = tmp_path / "sweep.toml"
+    explicit.write_text("[transform]\ntranspose = 21\n")
+
+    seen = []
+    real_merge = config_module.merge
+
+    def spy(config, text, source):
+        seen.append(source)
+        return real_merge(config, text, source)
+
+    monkeypatch.setattr(config_module, "merge", spy)
+    config_module.resolve(tmp_path, "minuet", preset="lush", explicit=explicit)
+    monkeypatch.undo()
+
+    # Anti-vacuity, deliberately a floor rather than an equality: this asserts
+    # the fixture really does stack four layers, without becoming the thing that
+    # fails when a fifth is added. An equality here would catch a new layer and
+    # invite the reader to bump the number, leaving the naming check below —
+    # the assertion that actually matters — still passing and still wrong.
+    assert len(seen) >= 4, f"expected preset + project + piece + explicit, got {seen}"
+
+    result = runner.invoke(
+        app,
+        [
+            "convert", str(tmp_path / "minuet.mxl"), "-o", str(tmp_path),
+            "--preset", "lush", "--config", str(explicit),
+        ],
+        env={"COLUMNS": "400"},
+    )
+    assert result.exit_code != 0
+    for source in seen:
+        assert source in result.output, f"the refusal never named the layer {source!r}"

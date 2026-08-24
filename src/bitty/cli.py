@@ -59,7 +59,12 @@ def _settings(
 
 
 def _transform(
-    parsed, settings: Config, directory: Path, stem: str, explicit: Path | None
+    parsed,
+    settings: Config,
+    directory: Path,
+    stem: str,
+    preset: str | None,
+    explicit: Path | None,
 ):
     """The score's own validation, wrapped with the provenance only the CLI has.
 
@@ -67,14 +72,22 @@ def _transform(
     every layer into a plain `Config` and keeps no source. Neither can write
     the whole message, so the CLI composes it — the same division `loop.trim`
     and `--bars` already keep.
+
+    The order below restates the one `load` applies — preset, then discovered
+    files, then the explicit path. Restating it is the cost of `Config` keeping
+    no provenance, and it is a real cost: a seventh layer added to `resolve`
+    would resolve correctly while quietly going unnamed here, in the one message
+    a person debugs from. `test_the_refusal_names_every_layer_that_was_actually_read`
+    is what stops that, by watching `merge` rather than trusting this list.
     """
     try:
         return transform_stage.apply(parsed, settings.transform)
     except ValueError as error:
-        sources = config_module.discover(directory, stem)
+        sources = [f"preset {preset}"] if preset is not None else []
+        sources += [str(path) for path in config_module.discover(directory, stem)]
         if explicit is not None:
-            sources.append(explicit)
-        where = "".join(f"\nConfig read from: {path}" for path in sources)
+            sources.append(str(explicit))
+        where = "".join(f"\nConfig read from: {source}" for source in sources)
         raise typer.BadParameter(f"{error}{where}", param_hint="--config") from error
 
 
@@ -121,7 +134,7 @@ def sections(
     settings = _settings(score.parent, score.stem, preset, config_path, None, None, None)
 
     parsed = ingest(score)
-    parsed = _transform(parsed, settings, score.parent, score.stem, config_path)
+    parsed = _transform(parsed, settings, score.parent, score.stem, preset, config_path)
     found = analyze(parsed)
     total = found[-1].end if found else 0.0
 
@@ -184,7 +197,7 @@ def convert(
     )
 
     parsed = ingest(score)
-    parsed = _transform(parsed, settings, score.parent, score.stem, config_path)
+    parsed = _transform(parsed, settings, score.parent, score.stem, preset, config_path)
     if bars:
         first, last = _bar_range(bars)
         try:
