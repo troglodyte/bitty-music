@@ -761,7 +761,7 @@ ragtime's G#4 is an octave over its opening lead, which is what a loop that
 comes around tends to do. So the null result is about audibility, not about
 having dodged a harmonic problem.
 
-Phase 9 is implemented: `[transform]`, with `transpose` and `tempo_scale`.
+Phase 9 is done: `[transform]`, with `transpose` and `tempo_scale`.
 The decision that shapes the rest of it is that `tempo_scale` re-derives the
 arrangement rather than replaying it faster. It scales `bpm` and every note
 and bar time inversely, before the arranger sees the score, so the
@@ -788,17 +788,43 @@ is the note soup voice-leading assignment exists to prevent. `render`
 deliberately does not transform, so a convert at `+3` re-rendered under the
 same config cannot land at `+6`.
 
-**The audition is still owed, and it is what sets the two bounds.** C1 and
-C8 are provisional taste rather than measurement — the same way Phase 7's
-48 ms was set by ear — so the clips exist and the numbers are recorded in
-`audition/transform/NOTES.md` but nothing has been listened to. What the
-measurements do say: the control is byte-identical to a plain convert, no
-clip contains a quiet window, the loop picked bars 1-8 in every variant
-including all three tempo scales, and the envelope-frame risk is real but
-narrow — at `tempo_scale = 4.0` two of the minuet's 156 events fall under
-one 16.7 ms envelope frame, while at `1.5` none do. If the audition
-disagrees with C1 or C8, the constants move and this paragraph's numbers
-are wrong rather than its design.
+Auditioned 2026-08-24 on studio monitors and accepted, which finishes the
+phase. The audition's job was to **set** the two bounds rather than to
+confirm the design, the way Phase 7's 48 ms was set by ear, and it left
+both where they were: `MIN_PITCH = 24` (C1) and `MAX_PITCH = 108` (C8) in
+`transform.py` are now taste that someone has actually exercised. The
+bounds were judged on purpose-built chromatic probes — one voice, one note
+per 0.8 s, running two semitones past the fence in each direction, so the
+verdict is about where the fence belongs and not merely about what is
+inside it. The earlier `+20` and `−18` clips could not have answered it:
+at `+20` only 2 events, 0.5 s of 24 s, come within two semitones of the
+ceiling.
+
+The floor verdict carries a caveat the ceiling's does not. A pulse at C8
+is 0.10% inharmonic, so the ceiling is objectively clean and only
+musicality was ever in question. The bass triangle is 96-98% fundamental
+with no harmonic series to imply a missing one, so C1 either reproduces or
+it does not — a verdict reached on a laptop speaker would not transfer.
+This one was reached on full-range monitors, which is the strongest form
+of it and also the narrowest: the floor was heard as intended, not heard
+through a rolloff.
+
+The phase's most contested behaviour also passed. Crossing
+`tempo_scale = 0.60` puts ragtime's 0.3 s notes at exactly 0.5 s, so 170
+of 280 notes cross `vibrato.min_note_sec` at once across a 1.6% tempo
+difference that is itself inaudible. That arriving vibrato reads as the
+piece breathing rather than as seasickness, so the threshold policy stands
+as it is — it was the thing that would have needed revisiting, not the
+transform. At `tempo_scale = 4.0` the envelope-frame risk is real on paper
+and inaudible in practice: two of the minuet's 156 events fall under one
+16.7 ms envelope frame — `lead` at t=0.875 s and t=1.000 s, both 8.0 ms —
+and neither articulates as a click. What 4.0 does sound like is very fast,
+which is what compressing the minuet into 6.1 s is.
+
+The supporting measurements held: the control is byte-identical to a plain
+convert, no clip contains a quiet window, and the loop picked bars 1-8 in
+every variant including all three tempo scales, with only `loop.end_sec`
+scaling.
 
 Design documents and per-phase implementation plans live in
 `docs/superpowers/`.
