@@ -29,6 +29,31 @@ KICK, SNARE, HAT = "kick", "snare", "hat"
 # reads to the ear as a note. Calibration, set by the phase's audition.
 PITCH = {KICK: 36, SNARE: 52, HAT: 76}
 
+# Strongest first. A hat that lands on a downbeat is dropped rather than
+# allowed to truncate the kick — which is deliberately *not* the mutable
+# truncation `arrange._assign` performs on pitched channels. That path exists
+# to preserve voice-leading, and there is no voice-leading here.
+PRIORITY = (KICK, SNARE, HAT)
+
+# The shortest gap between two audible hits, and the phase's counterpart to
+# ARP_RATE_SEC: a fact about the ear expressed in seconds, set by audition
+# rather than guessed. It deliberately does not scale with tempo, so density
+# is a property of the pattern meeting the tempo — a fast piece loses its
+# subdivisions and keeps its backbeat, and `tempo_scale` feeds this for free
+# because Phase 9 rewrites bar times before `arrange` ever runs.
+#
+# Where it bites, measured on the fixtures at their own tempos: hat spacing is
+# 250 ms on the chorale, 300 ms on ragtime, 500 ms on the minuet. So anything
+# below 250 ms is inert at tempo_scale = 1.0, and the crossing arrives between
+# 2.0 and 4.0 for the chorale and ragtime. The minuet never crosses: 500 ms at
+# the 4.0 ceiling is still 125 ms, so a waltz keeps its full groove at any
+# tempo this pipeline can ask for.
+MIN_HIT_SEC = 0.10
+
+# How long one hit rings before the envelope has finished with it. Clipped to
+# the gap that follows, so the channel stays monophonic. Also calibration.
+HIT_SEC = 0.12
+
 
 @dataclass(frozen=True)
 class Hit:
@@ -86,8 +111,32 @@ def groove(bars: tuple[Bar, ...], bpm: float, level: float) -> tuple[Event, ...]
             if offset >= bar.dur - EPSILON:
                 continue
             placed.append((bar.start + offset, hit))
-    placed.sort(key=lambda pair: pair[0])
-    return tuple(_event(when, hit, level) for when, hit in placed)
+    return _resolve(placed, level)
+
+
+def _resolve(placed: list[tuple[float, Hit]], level: float) -> tuple[Event, ...]:
+    """Candidates to a monophonic channel: priority, then the floor, then durs.
+
+    Greedy and strongest-first across the whole piece, which makes the rule
+    sayable in one sentence: place the loudest drums, then drop anything that
+    would land too soon after something already placed.
+    """
+    kept: list[tuple[float, Hit]] = []
+    for drum in PRIORITY:
+        for when, hit in sorted(
+            (pair for pair in placed if pair[1].drum == drum),
+            key=lambda pair: pair[0],
+        ):
+            if any(abs(when - other) < MIN_HIT_SEC for other, _ in kept):
+                continue
+            kept.append((when, hit))
+
+    kept.sort(key=lambda pair: pair[0])
+    events = []
+    for index, (when, hit) in enumerate(kept):
+        gap = kept[index + 1][0] - when if index + 1 < len(kept) else HIT_SEC
+        events.append(_event(when, hit, level, min(HIT_SEC, gap)))
+    return tuple(events)
 
 
 def _pattern(bar: Bar) -> tuple[Hit, ...]:
@@ -109,10 +158,10 @@ def _pattern(bar: Bar) -> tuple[Hit, ...]:
         ) from None
 
 
-def _event(when: float, hit: Hit, level: float) -> Event:
+def _event(when: float, hit: Hit, level: float, dur: float) -> Event:
     return Event(
         t=when,
         pitch=PITCH[hit.drum],
-        dur=0.0,  # Task 3 sets this from the gap to the next hit
+        dur=dur,
         vel=min(MAX_VELOCITY, round(hit.vel * level)),
     )

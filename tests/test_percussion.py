@@ -100,3 +100,92 @@ def test_level_scales_velocity():
 
 def test_no_bars_is_no_groove():
     assert percussion.groove((), 120.0, 1.0) == ()
+
+
+def test_a_hat_on_a_downbeat_loses_to_the_kick():
+    """Priority resolves the collision in the musical direction."""
+    events = percussion.groove(bars(1), 120.0, 1.0)
+    at_zero = [e for e in events if abs(e.t) < EPSILON]
+    assert len(at_zero) == 1
+    assert at_zero[0].pitch == percussion.PITCH[percussion.KICK]
+
+
+def test_no_two_events_overlap():
+    """The same rule test_goldens holds every pitched channel to."""
+    events = percussion.groove(bars(4), 120.0, 1.0)
+    for earlier, later in zip(events, events[1:]):
+        assert earlier.t + earlier.dur <= later.t + EPSILON
+
+
+def test_events_come_back_in_time_order():
+    events = percussion.groove(bars(4), 120.0, 1.0)
+    assert list(events) == sorted(events, key=lambda e: e.t)
+
+
+def test_hats_survive_at_an_ordinary_tempo():
+    """The chorale's eighths are 250 ms apart at its own tempo."""
+    events = percussion.groove(bars(1), 120.0, 1.0)
+    assert times(events, percussion.PITCH[percussion.HAT])
+
+
+def test_the_floor_drops_the_hats_when_the_bars_get_short():
+    """Four times the tempo puts the chorale's eighths 62 ms apart.
+
+    The kicks survive: at 480 bpm a 4/4 bar is half a second, so the two of
+    them are still 250 ms apart. The floor thins the subdivisions and leaves
+    the skeleton of the bar standing, which is the whole point of it.
+    """
+    fast = bars(1, bpm=480.0)
+    events = percussion.groove(fast, 480.0, 1.0)
+    assert times(events, percussion.PITCH[percussion.HAT]) == []
+    assert times(events, percussion.PITCH[percussion.KICK]) == [0.0, 0.25]
+
+
+def test_the_floor_is_seconds_and_not_beats():
+    """The same bar count at half tempo keeps hats the fast one loses.
+
+    If MIN_HIT_SEC were expressed in beats, both would behave the same and the
+    machine gun would come back at speed.
+    """
+    slow = percussion.groove(bars(1, bpm=120.0), 120.0, 1.0)
+    fast = percussion.groove(bars(1, bpm=480.0), 480.0, 1.0)
+    hat = percussion.PITCH[percussion.HAT]
+    assert len(times(slow, hat)) > len(times(fast, hat))
+
+
+def test_a_hit_is_never_longer_than_the_gap_after_it():
+    events = percussion.groove(bars(2), 120.0, 1.0)
+    for earlier, later in zip(events, events[1:]):
+        assert earlier.dur <= later.t - earlier.t + EPSILON
+    assert all(e.dur <= percussion.HIT_SEC + EPSILON for e in events)
+    assert all(e.dur > 0.0 for e in events)
+
+
+def test_priority_beats_the_order_the_candidates_arrive_in():
+    """The kick wins because it is a kick, not because the table lists it first.
+
+    `groove` alone cannot prove this. PATTERNS declares the 4/4 kick ahead of
+    the hats, so a stable sort by time crowns the kick at a t=0 tie whether or
+    not PRIORITY exists. Feeding the candidates hat-first makes the rule do
+    the work itself.
+    """
+    hat = percussion.Hit(0.0, percussion.HAT, 7)
+    kick = percussion.Hit(0.0, percussion.KICK, 15)
+    events = percussion._resolve([(0.0, hat), (0.0, kick)], 1.0)
+    assert [e.pitch for e in events] == [percussion.PITCH[percussion.KICK]]
+
+
+def test_a_gap_shorter_than_a_hit_shortens_the_hit():
+    """The tempo where the clip actually bites, which 120 bpm never reaches.
+
+    At 120 bpm the surviving hits are 250 ms apart, twice HIT_SEC, so
+    `min(HIT_SEC, gap)` is inert and a hit fixed at HIT_SEC would look
+    correct. At 280 bpm the floor lets hits through 107 ms apart — above
+    MIN_HIT_SEC, below HIT_SEC — and the clip is the only thing keeping the
+    channel monophonic.
+    """
+    events = percussion.groove(bars(1, bpm=280.0), 280.0, 1.0)
+    gaps = [later.t - earlier.t for earlier, later in zip(events, events[1:])]
+    assert gaps and max(gaps) < percussion.HIT_SEC, "this tempo must exercise the clip"
+    for earlier, later in zip(events, events[1:]):
+        assert earlier.t + earlier.dur <= later.t + EPSILON
