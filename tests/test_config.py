@@ -242,6 +242,44 @@ def test_an_unknown_transform_key_lists_the_two_that_exist():
     assert "tempo_scale" in str(error.value) and "transpose" in str(error.value)
 
 
+def test_percussion_is_off_by_default():
+    """The whole phase rests on this: nothing that exists today moves."""
+    assert DEFAULTS.percussion.enabled is False
+    assert DEFAULTS.percussion.level == 0.8
+
+
+def test_a_file_can_turn_percussion_on():
+    result = merge(DEFAULTS, "[percussion]\nenabled = true\nlevel = 0.5\n", "test")
+    assert result.percussion.enabled is True
+    assert result.percussion.level == 0.5
+
+
+def test_a_file_silent_on_percussion_leaves_it_off():
+    result = merge(DEFAULTS, "[echo]\nlevel = 0.2\n", "test")
+    assert result.percussion.enabled is False
+
+
+def test_an_unknown_percussion_key_names_the_alternatives():
+    with pytest.raises(ConfigError) as error:
+        merge(DEFAULTS, "[percussion]\nkick = 40\n", "test")
+    message = str(error.value)
+    assert "percussion.kick" in message
+    assert "enabled" in message and "level" in message
+
+
+def test_percussion_level_is_bounded():
+    with pytest.raises(ConfigError):
+        merge(DEFAULTS, "[percussion]\nlevel = 1.5\n", "test")
+    with pytest.raises(ConfigError):
+        merge(DEFAULTS, "[percussion]\nlevel = -0.1\n", "test")
+
+
+def test_percussion_enabled_rejects_a_number():
+    """`_flag` exists so that `enabled = 1` is an error rather than a truthy 1."""
+    with pytest.raises(ConfigError):
+        merge(DEFAULTS, "[percussion]\nenabled = 1\n", "test")
+
+
 def test_broken_toml_names_the_file():
     with pytest.raises(ConfigError) as caught:
         merge(DEFAULTS, "[echo\nlevel = 0.5\n", "bitty.toml")
