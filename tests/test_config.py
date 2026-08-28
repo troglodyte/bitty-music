@@ -392,8 +392,9 @@ def test_a_file_beats_the_preset_it_started_from(tmp_path):
     assert load([override], preset="nes-tight").echo.on is True
 
 
-def test_both_presets_ship_and_load():
-    assert set(preset_names()) == {"lush", "nes-tight"}
+def test_every_preset_ships_and_loads():
+    """Exhaustive on purpose: a new preset should be a deliberate edit here."""
+    assert set(preset_names()) == {"arcade", "lush", "nes-tight"}
     for name in preset_names():
         load([], preset=name)
 

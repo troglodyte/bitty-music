@@ -1,0 +1,14 @@
+# The gamified mode: a drum groove the score does not contain.
+#
+# One key, and that is the honest size of it. The kit — the noise channel's
+# clock rates, its shared envelope, and the floor that thins the subdivisions
+# at speed — is calibration in percussion.py and voices.py, set by audition
+# rather than by the config file, the same rule that keeps ARP_RATE_SEC out.
+#
+# The groove is a pattern per time signature placed on the score's own
+# barlines, so every hit can be justified by pointing at one. It supports 4/4,
+# 2/4, 3/4, and 6/8; a score in any other meter refuses rather than being
+# played as though it were in one of those.
+
+[percussion]
+enabled = true

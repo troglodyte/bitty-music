@@ -5,13 +5,17 @@ from pathlib import Path
 
 import pytest
 
-from bitty import percussion
+from bitty import loop as loop_stage
+from bitty import percussion, synth
+from bitty.analyze import analyze
 from bitty.arrange import arrange
-from bitty.config import DEFAULTS
+from bitty.config import DEFAULTS, Transform, load, preset_names
 from bitty.ingest import ingest
 from bitty.model import Bar
+from bitty.transform import apply
 
 FIXTURES = Path(__file__).parent / "fixtures"
+NAMES = ["chorale", "minuet", "ragtime"]
 
 EPSILON = 1e-6
 
@@ -247,3 +251,89 @@ def test_the_arrangement_round_trips_through_json():
     score = ingest(FIXTURES / "chorale.mxl")
     drummed = arrange(score, on())
     assert Arrangement.from_json(drummed.to_json()) == drummed
+
+
+def test_the_arcade_preset_exists_and_turns_percussion_on():
+    assert "arcade" in preset_names()
+    config = load([], preset="arcade")
+    assert config.percussion.enabled is True
+
+
+def test_every_fixture_grooves():
+    """The three fixtures are 4/4, 3/4, and 2/4 — one per pattern that has one."""
+    for name in NAMES:
+        score = ingest(FIXTURES / f"{name}.mxl")
+        drummed = arrange(score, on())
+        assert drummed.channels[-1].role == "perc"
+        assert drummed.channels[-1].events, name
+
+
+@pytest.mark.parametrize("name", NAMES)
+def test_the_drums_run_the_length_of_the_piece(name):
+    score = ingest(FIXTURES / f"{name}.mxl")
+    perc = arrange(score, on()).channels[-1]
+    last_bar = score.bars[-1]
+    assert perc.events[0].t < 1e-6
+    assert perc.events[-1].t < last_bar.start + last_bar.dur
+
+
+# Which fixtures the floor can actually reach, and which it cannot. Hat
+# spacing at each fixture's own tempo is 250 ms on the chorale, 300 ms on
+# ragtime, and 500 ms on the minuet, against MIN_HIT_SEC = 100 ms. The
+# chorale and ragtime cross between tempo_scale 2.0 and 4.0 — measured, they
+# go 64 hits to 64 at 2.0 and to 32 at 4.0. The minuet cannot cross at all:
+# 500 ms at the 4.0 ceiling the config validator enforces is still 125 ms, so
+# a waltz keeps its whole groove at every tempo this pipeline can ask for.
+# That is a property of the 3/4 pattern being sparse, not a bug, and it is
+# split out here rather than papered over with a <= assertion.
+THINS = ["chorale", "ragtime"]
+NEVER_THINS = ["minuet"]
+
+
+@pytest.mark.parametrize("name", THINS)
+def test_four_times_tempo_thins_the_groove(name):
+    """Phase 9 rewrites bar times before arrange runs, so the floor gets it free."""
+    score = ingest(FIXTURES / f"{name}.mxl")
+    plain = arrange(score, on()).channels[-1].events
+    fast = arrange(apply(score, Transform(tempo_scale=4.0)), on()).channels[-1].events
+    assert len(fast) < len(plain), name
+
+
+@pytest.mark.parametrize("name", NEVER_THINS)
+def test_a_sparse_pattern_survives_the_tempo_ceiling(name):
+    """The other half of the floor's story, and the reason it is a floor.
+
+    Density is the pattern meeting the tempo. The 3/4 pattern is sparse
+    enough that the fastest score this pipeline can produce still clears
+    MIN_HIT_SEC, so nothing is dropped. If this starts failing, either the
+    waltz pattern gained subdivisions or MIN_HIT_SEC moved a long way up.
+    """
+    score = ingest(FIXTURES / f"{name}.mxl")
+    plain = arrange(score, on()).channels[-1].events
+    fast = arrange(apply(score, Transform(tempo_scale=4.0)), on()).channels[-1].events
+    assert len(fast) == len(plain), name
+    gaps = [b.t - a.t for a, b in zip(fast, fast[1:])]
+    assert min(gaps) >= percussion.MIN_HIT_SEC
+
+
+@pytest.mark.parametrize("name", NAMES)
+def test_the_drums_do_not_move_the_loop(name):
+    """An observation, not a requirement. If it fails, that is a README finding."""
+    score = ingest(FIXTURES / f"{name}.mxl")
+    sections = analyze(score)
+    picks = []
+    for config in (DEFAULTS, on()):
+        arrangement = arrange(score, config)
+        audio = synth.render(arrangement)
+        chosen = loop_stage.choose(
+            loop_stage.candidates(score, sections, min_bars=config.loop.min_bars),
+            audio,
+            arrangement,
+            DEFAULTS.output.sample_rate,
+        )
+        picks.append(
+            None
+            if chosen is None
+            else (chosen.candidate.first_bar, chosen.candidate.last_bar)
+        )
+    assert picks[0] == picks[1], f"{name}: drums changed the loop to {picks[1]}"
