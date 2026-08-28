@@ -1,9 +1,17 @@
 """The groove: a pattern per meter, placed on the score's own barlines."""
 
+from dataclasses import replace
+from pathlib import Path
+
 import pytest
 
 from bitty import percussion
+from bitty.arrange import arrange
+from bitty.config import DEFAULTS
+from bitty.ingest import ingest
 from bitty.model import Bar
+
+FIXTURES = Path(__file__).parent / "fixtures"
 
 EPSILON = 1e-6
 
@@ -189,3 +197,53 @@ def test_a_gap_shorter_than_a_hit_shortens_the_hit():
     assert gaps and max(gaps) < percussion.HIT_SEC, "this tempo must exercise the clip"
     for earlier, later in zip(events, events[1:]):
         assert earlier.t + earlier.dur <= later.t + EPSILON
+
+
+def on(level=0.8, **rest):
+    return replace(
+        DEFAULTS,
+        percussion=replace(DEFAULTS.percussion, enabled=True, level=level),
+        **rest,
+    )
+
+
+def test_percussion_off_changes_nothing():
+    """The whole phase rests on this. If it fails, nothing else matters."""
+    score = ingest(FIXTURES / "chorale.mxl")
+    assert arrange(score) == arrange(score, DEFAULTS)
+    assert all(c.role != "perc" for c in arrange(score).channels)
+
+
+def test_percussion_on_appends_one_noise_channel():
+    score = ingest(FIXTURES / "chorale.mxl")
+    plain = arrange(score)
+    drummed = arrange(score, on())
+    assert len(drummed.channels) == len(plain.channels) + 1
+    assert drummed.channels[:-1] == plain.channels, "the pitched channels are untouched"
+    perc = drummed.channels[-1]
+    assert perc.role == "perc"
+    assert perc.instrument.wave == "noise"
+    assert perc.echo is None
+    assert perc.events
+
+
+def test_percussion_is_not_a_voice_in_the_roster():
+    """count narrows the pitched reduction and has no opinion about drums."""
+    from bitty import voices
+
+    assert voices.PERC not in voices.VOICES
+    assert len(voices.VOICES) == 5
+    score = ingest(FIXTURES / "chorale.mxl")
+    narrow = on(voices=replace(DEFAULTS.voices, count=3))
+    roles = [c.role for c in arrange(score, narrow).channels]
+    assert roles[-1] == "perc"
+    assert len(roles) == 4, "three pitched voices plus the drums"
+
+
+def test_the_arrangement_round_trips_through_json():
+    """A hand-edited file must render the drums back without re-deriving them."""
+    from bitty.arrangement import Arrangement
+
+    score = ingest(FIXTURES / "chorale.mxl")
+    drummed = arrange(score, on())
+    assert Arrangement.from_json(drummed.to_json()) == drummed
