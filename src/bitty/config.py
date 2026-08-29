@@ -89,6 +89,21 @@ class Transform:
 
 
 @dataclass(frozen=True)
+class Percussion:
+    """Drums the score does not contain. Off unless asked for.
+
+    Two keys, and deliberately only two. The kit itself — the noise channel's
+    clock rates, its envelope, the hit length, and the floor that thins the
+    subdivisions at speed — is calibration set by audition, and 5b settled that
+    calibration stays out of the TOML. The same rule keeps `ARP_RATE_SEC` and
+    the playable-pitch bounds out of it.
+    """
+
+    enabled: bool = False
+    level: float = 0.8
+
+
+@dataclass(frozen=True)
 class Config:
     output: Output = Output()
     echo: EchoSettings = EchoSettings()
@@ -96,6 +111,7 @@ class Config:
     vibrato: Vibrato = Vibrato()
     loop: LoopSettings = LoopSettings()
     transform: Transform = Transform()
+    percussion: Percussion = Percussion()
     voices: Roster = ROSTER
 
 
@@ -263,6 +279,10 @@ _TABLES = {
     "transform": {
         "transpose": ("transpose", _whole(low=-48, high=48)),
         "tempo_scale": ("tempo_scale", _ranged(low=0.25, high=4.0)),
+    },
+    "percussion": {
+        "enabled": ("enabled", _flag),
+        "level": ("level", _ranged(low=0.0, high=1.0)),
     },
 }
 

@@ -57,6 +57,21 @@ BASS = Voice(
     pan=0.0,
 )
 
+# Deliberately not in VOICES. Percussion is not part of the pitched reduction:
+# it takes no slot in the roster, `count` does not narrow it, and it never
+# carries the arpeggio overflow. It is declared here anyway because this file
+# is where a timbre lives, and the arranger should no more hard-code a drum
+# than it hard-codes a lead.
+#
+# One channel, so one envelope for all three drums — which is also what the
+# real noise channel offers. The last step is 0 because the last step sustains,
+# and a drum that ends on a nonzero level is a drum that never stops.
+PERC = Voice(
+    role="perc",
+    instrument=Instrument(wave="noise", volume_env=(15, 12, 8, 5, 3, 1, 0)),
+    pan=0.0,
+)
+
 VOICES = (LEAD, COUNTER, INNER_A, INNER_B, BASS)
 
 MIN_VOICES = 3  # below this there is no middle voice to carry the arpeggio

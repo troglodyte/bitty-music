@@ -20,8 +20,9 @@ from itertools import groupby
 from bitty.arrangement import MAX_VELOCITY, Arrangement, Channel, Echo, Event
 from bitty.config import DEFAULTS, Config, EchoSettings
 from bitty.model import Note, Score
+from bitty.percussion import groove
 from bitty.reduce import OCTAVE, Cycle, Displace, Drop, decide
-from bitty.voices import Roster
+from bitty.voices import PERC, Roster
 
 EPSILON = 1e-6  # onset times are floats; anything closer than this is one moment
 
@@ -67,6 +68,18 @@ def arrange(score: Score, config: Config = DEFAULTS) -> Arrangement:
                 echo=_echo(score.bpm, config.echo) if voice.role == roster.lead else None,
             )
         )
+
+    if config.percussion.enabled:
+        hits = groove(score.bars, score.bpm, config.percussion.level)
+        if hits:
+            channels.append(
+                Channel(
+                    role=PERC.role,
+                    instrument=PERC.instrument,
+                    events=hits,
+                    pan=PERC.pan,
+                )
+            )
 
     meta = {"title": score.title, "bpm": score.bpm}
     if score.bars:

@@ -319,6 +319,11 @@ Channels with nothing to play are dropped rather than rendered silent — the
 synth divides headroom by channel count, so an empty channel only costs
 loudness.
 
+A sixth channel, `perc`, plays only when `[percussion]` turns it on. It is not
+part of that roster: `[voices] count` does not narrow it, it never carries the
+arpeggio overflow, and it holds no pitched material — its `pitch` field is a
+noise clock rate rather than a note. See [`[percussion]`](#percussion) below.
+
 ## The arrangement file
 
 `arrangement.json` is the hand-edit surface, and it is deliberately flat: fixing
@@ -477,6 +482,10 @@ seam_ratio = 1.0          # >=0.0
 [transform]
 transpose = 0             # -48..48 semitones; refuses if the score leaves C1-C8
 tempo_scale = 1.0         # 0.25-4.0; re-arranges at the new tempo
+
+[percussion]
+enabled = false           # a drum groove the score does not contain
+level = 0.8               # 0.0-1.0; scales every hit's velocity
 ```
 
 `[vibrato]`'s first three keys are spread onto every voice's instrument;
@@ -635,6 +644,74 @@ applied `[transform]` too, a `convert` at `+3` re-rendered under the same
 config would land at `+6` — the same file transposed twice by the same
 config, which is exactly the surprise a rendering step must not hold.
 
+### `[percussion]`
+
+```toml
+[percussion]
+enabled = false           # off by default
+level = 0.8               # 0.0-1.0; scales every hit's velocity
+```
+
+Off by default, and that is the one thing about this table that is not
+adjustable taste. Every other stage of the pipeline *reduces* the score:
+whatever comes out can be traced back to a note somebody wrote. Drums are
+generated — no chorale contains a hi-hat — so they are opt in, and turning
+`[percussion]` off leaves every arrangement in this repo byte-identical to
+what it was before the feature existed.
+
+The groove comes from the meter, not from the music. Each bar gets the
+pattern for its own time signature, placed at `bar.start + quarters × 60/bpm`,
+so every hit can be justified by pointing at a barline. Positions are counted
+in **quarter notes**, because `bpm` is quarter-note based everywhere in this
+pipeline — which is why a 6/8 bar below is three quarters long rather than
+six ambiguous "beats".
+
+| Meter | Kick | Snare | Hats |
+|---|---|---|---|
+| 4/4 | 1, 3 | 2, 4 | eight eighths |
+| 2/4 | 1 | 2 | four eighths |
+| 3/4 | 1 | — | 2, 3 |
+| 6/8 | 1 | 2 (quarter 1.5) | six eighths |
+
+3/4 has no backbeat on purpose. A waltz that gets one stops being a waltz,
+and the hats on beats 2 and 3 are doing the job a snare would do wrong.
+Writing that exception into a general rule would only turn the rule back
+into this table, so the table is the rule.
+
+Four meters, and nothing else. A score in any other signature refuses by
+name — `bar 1 is in 5/4, which has no percussion pattern` — rather than
+being played as though it were in one of these. There is no fallback
+pattern: a 5/4 piece given a 4/4 groove is a wrong answer that sounds like
+an answer.
+
+**The floor.** The channel is monophonic, so the candidate hits are resolved
+into a sequence: strongest drum first (kick, then snare, then hat), and
+anything landing within `MIN_HIT_SEC` — 100 ms — of a hit already placed is
+dropped. So a fast piece loses its subdivisions and keeps its backbeat. This
+is why `tempo_scale = 4.0` does not produce a machine gun: hat spacing at
+each fixture's own tempo is 250 ms on the chorale, 300 ms on ragtime, and
+500 ms on the minuet, so at 4× the chorale and ragtime fall to 62 ms and
+75 ms and halve their hit count, crossing somewhere between `tempo_scale`
+2.0 and 4.0. The minuet never crosses at all — 125 ms at the 4.0 ceiling is
+still clear of the floor — because the 3/4 pattern is sparse to begin with.
+Density is the pattern meeting the tempo, which is the point of expressing
+the floor in seconds: it is a measurement of hearing, not of music, so it
+does not scale with the beat.
+
+**The kit is not configurable, and that is deliberate.** The noise clock
+rates that read as kick, snare, and hat, the envelope they share, how long a
+hit rings, and the floor itself are all calibration set by audition — they
+live as constants in `percussion.py` and `voices.py`, for the same reason
+`ARP_RATE_SEC` and the C1-C8 playable band are not config keys. They
+describe the instrument and the ear rather than a piece's preferences. Two
+keys is the honest size of this table.
+
+The `arcade` preset turns it on and changes nothing else.
+
+One cost worth knowing: `synth` divides headroom by `sqrt(len(channels))`, so
+a sixth channel pulls the whole mix down by 0.79 dB on all three fixtures —
+the drums are not free, and the pitched voices pay for them.
+
 ### Milliseconds in the file, seconds in the code
 
 Every key ending in `_ms` — `arp.rate_ms`, `vibrato.delay_ms`,
@@ -645,7 +722,7 @@ carry the other side's convention.
 
 ### Presets
 
-Two ship in `presets/`, selected with `--preset NAME`:
+Three ship in `presets/`, selected with `--preset NAME`:
 
 - **`nes-tight`** — closer to the hardware: `count = 3`, no echo, a mono
   image (every voice's pan pinned to `0.0`), and vibrato that arrives
@@ -658,6 +735,9 @@ Two ship in `presets/`, selected with `--preset NAME`:
 - **`lush`** — the other direction: a longer, louder echo, a wide stereo
   image, and vibrato that arrives early enough to sing on ordinary
   phrase-length notes.
+- **`arcade`** — the gamified mode: a meter-driven drum groove on a sixth,
+  noise channel, and nothing else changed. One key, because the kit itself
+  is calibration rather than config. See `[percussion]` above.
 
 ### Unknown keys are an error, not a warning
 
@@ -673,7 +753,7 @@ accepts delay_beats, level, on
 ```
 
 The same happens for an unknown table (`unknown table; bitty config accepts
-arp, echo, loop, output, transform, vibrato, voices`) and an unknown `[voices.<role>]`
+arp, echo, loop, output, percussion, transform, vibrato, voices`) and an unknown `[voices.<role>]`
 role (`unknown voice; the roster is lead, counter, inner_a, inner_b, bass`)
 or key.
 
@@ -825,6 +905,45 @@ The supporting measurements held: the control is byte-identical to a plain
 convert, no clip contains a quiet window, and the loop picked bars 1-8 in
 every variant including all three tempo scales, with only `loop.end_sec`
 scaling.
+
+Phase 10 is done as code, and its audition is still owed. `[percussion]`
+puts a drum groove on a sixth, noise channel — off by default, so nothing
+that existed before it moves; the goldens are unchanged and unregenerated,
+which is the phase's real identity guard. The `arcade` preset turns it on.
+
+The decision that shapes it is that the groove comes from the meter rather
+than from the score. A pattern per time signature is placed on the score's
+own barlines, so every hit can be justified by pointing at one; the
+alternative considered — deriving a pattern from onset density — would have
+put hits on a chorale that nobody could account for afterwards. Four meters
+have patterns: 4/4, 2/4, 3/4, and 6/8. Anything else refuses by name and by
+bar number rather than falling back, because a 5/4 piece given a 4/4 groove
+is a wrong answer that sounds like an answer. 3/4 gets no backbeat.
+
+The channel is monophonic, so hits resolve strongest-first with a 100 ms
+floor. Measured on the fixtures at their own tempos, hat spacing is 250 ms
+on the chorale, 300 ms on ragtime, and 500 ms on the minuet, so the floor is
+inert at `tempo_scale = 1.0` and bites between 2.0 and 4.0: the chorale and
+ragtime both hold 64 hits at 2.0 and fall to 32 at 4.0. The minuet holds all
+48 at every tempo scale — 500 ms at the 4.0 ceiling is still 125 ms, clear
+of the floor — so a waltz keeps its whole groove at any tempo this pipeline
+can ask for. That asymmetry is a property of the 3/4 pattern being sparse,
+and it is asserted in two separate tests rather than smoothed into one that
+would pass either way.
+
+The drums do not move the loop on any fixture: plain and drummed pick the
+same span, bars 1-8 on the chorale and the minuet and bars 1-16 on ragtime.
+That was an open empirical question rather than a requirement, and the
+answer came back clean.
+
+What is not yet known is whether any of it sounds right. The kit — the noise
+clock rates for kick, snare, and hat, the envelope the three of them share,
+the 120 ms hit length, and the 100 ms floor — is calibration, which means it
+is a set of guesses until someone listens. The honest possible verdict
+includes "a meter grid does not belong on a chorale at all", in which case
+`arcade` documents itself as a preset for ragtime and its relatives. Phases
+8 and 9 both merged with an audition outstanding and said so plainly; this
+follows them.
 
 Design documents and per-phase implementation plans live in
 `docs/superpowers/`.
