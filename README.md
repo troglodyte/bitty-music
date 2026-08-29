@@ -687,9 +687,8 @@ an answer.
 **The floor.** The channel is monophonic, so the candidate hits are resolved
 into a sequence: strongest drum first (kick, then snare, then hat), and
 anything landing within `MIN_HIT_SEC` — 100 ms — of a hit already placed is
-dropped. So a fast piece loses its subdivisions and keeps its backbeat. This
-is why `tempo_scale = 4.0` does not produce a machine gun: hat spacing at
-each fixture's own tempo is 250 ms on the chorale, 300 ms on ragtime, and
+dropped. So a fast piece loses its subdivisions and keeps its backbeat: hat
+spacing at each fixture's own tempo is 250 ms on the chorale, 300 ms on ragtime, and
 500 ms on the minuet, so at 4× the chorale and ragtime fall to 62 ms and
 75 ms and halve their hit count, crossing somewhere between `tempo_scale`
 2.0 and 4.0. The minuet never crosses at all — 125 ms at the 4.0 ceiling is
@@ -697,6 +696,12 @@ still clear of the floor — because the 3/4 pattern is sparse to begin with.
 Density is the pattern meeting the tempo, which is the point of expressing
 the floor in seconds: it is a measurement of hearing, not of music, so it
 does not scale with the beat.
+
+What the floor caps is hit *count*, and the audition found that this is not
+the same thing as capping density. `HIT_SEC` is 120 ms and the floor lets
+hits through 100 ms apart, so above `tempo_scale = 1.0` the channel can be
+sounding 96% of the time — a noise bed the hits modulate rather than a
+sequence of hits. That is unresolved; see the Status section.
 
 **The kit is not configurable, and that is deliberate.** The noise clock
 rates that read as kick, snare, and hat, the envelope they share, how long a
@@ -944,6 +949,35 @@ includes "a meter grid does not belong on a chorale at all", in which case
 `arcade` documents itself as a preset for ragtime and its relatives. Phases
 8 and 9 both merged with an audition outstanding and said so plainly; this
 follows them.
+
+That audition is under way, and it has already moved one thing from opinion
+to measurement. At `tempo_scale = 1.0` the noise channel is sounding 48% of
+the time. At 2.0 and 4.0 it is sounding 96%, because `HIT_SEC` rings for
+120 ms while the floor lets hits through 100 ms apart. Above normal tempo
+the channel is therefore a continuous bed that the hits modulate, which is
+not what the floor was believed to prevent — the README said so above until
+this paragraph was written, and that sentence has been corrected rather
+than left standing.
+
+Heard on the chorale: x4 is fast to the edge of being readable, and x2 —
+the same eight hits per second — reads fine. That comparison rules out
+density as the cause, and with it `MIN_HIT_SEC` as the lever. What separates
+the two is that x2's bed is punctuated by 32 quiet high hats at velocity 6,
+while x4 is all kick and snare at 10-12 with nothing to break it up. So the
+floor stays at 100 ms.
+
+What is still open is the fix. Shortening `HIT_SEC` to 60 ms restores 48%
+sounding at every tempo scale, but it halves the normal case to 24% too, and
+whether a hit with that little ring still reads as a drum rather than a click
+has not been judged. If it does not, the honest fix is a hit length that
+depends on the gap available rather than a shorter constant — a code change,
+not a moved number. So nothing has moved: `MIN_HIT_SEC` is still 0.10 and
+`HIT_SEC` still 0.12, and the phase shipped on those values.
+
+The audition's other four questions are untouched: whether a meter grid
+belongs on a chorale at all, which clock rates read as kick, snare, and hat,
+whether one envelope across all three drums is audibly a compromise, and
+whether 0.8 is the right default `level`.
 
 Design documents and per-phase implementation plans live in
 `docs/superpowers/`.
